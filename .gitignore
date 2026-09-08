@@ -2,23 +2,65 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual Environments
 venv/
 .venv/
+ENV/
 env/
-.env
 
-# Node / Astro (Frontend)
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+*.local
+!.env.example
+
+# Node / Astro / Frontend
 node_modules/
 dist/
 .astro/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+lerna-debug.log*
+.turbo/
 
-# Docker & OS
+# Docker & Containers
+.docker/
+
+# OS Specific
 .DS_Store
 Thumbs.db
+ehthumbs.db
 
-# IDEs
+# IDE & Editor Settings
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
