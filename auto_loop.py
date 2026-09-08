@@ -111,8 +111,8 @@ Do NOT write code blindly. You have Serena MCP tools available.
 4. SECURITY ENFORCEMENT: NEVER hardcode real API keys, passwords, or secrets. When writing tests for external APIs (like Tailscale), you MUST use `unittest.mock` or `pytest-mock` to mock the HTTP responses. 
 5. TEMPLATE SECURITY: When generating template files like `.env.example`, ONLY use obvious, generic placeholders (e.g., `YOUR_API_KEY_HERE`). NEVER generate realistic-looking fake keys that match actual API key patterns (like `tskey-api-...`).
 """
-            # Call Flash with effort="high" and permissions enabled
-            draft = run_agent("gemini-3.8-flash", doer_prompt, effort="high", skip_perms=True)
+            # Call Flash with effort="medium" and permissions enabled
+            draft = run_agent("gemini-3.8-flash", doer_prompt, effort="medium", skip_perms=True)
             
             print(f"  ▶️ Checking work (Checker: Pro)...")
             
