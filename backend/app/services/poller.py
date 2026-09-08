@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import select, delete, delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import settings
@@ -661,6 +661,23 @@ async def sync_tailscale_devices(
             },
         )
     )
+
+    # Automatic Node Pruning: Delete nodes removed from Tailscale
+    live_ids = {str(d.id) for d in devices if getattr(d, 'id', None)}
+    live_node_ids = {str(d.node_id) for d in devices if getattr(d, 'node_id', None)}
+
+    all_db_nodes_res = await session.execute(select(Node))
+    existing_db_nodes = all_db_nodes_res.scalars().all()
+
+    stale_node_ids = [
+        n.id for n in existing_db_nodes
+        if str(n.id) not in live_ids and str(getattr(n, 'node_id', '')) not in live_node_ids
+    ]
+
+    if stale_node_ids:
+        logger.info("Pruning %d deleted Tailscale node(s) from database: %s", len(stale_node_ids), stale_node_ids)
+        await session.execute(delete(Node).where(Node.id.in_(stale_node_ids)))
+        await session.flush()
 
     return nodes_created, nodes_updated, node_states_recorded
 

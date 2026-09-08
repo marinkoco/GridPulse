@@ -13,7 +13,7 @@ import FleetMatrixTable from '../components/FleetMatrixTable.astro';
         <div>
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-3">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            Fleet Matrix & Security Telemetry Active (Step 19)
+            Fleet Matrix & Security Telemetry Active
           </div>
           <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
             Tailscale Fleet Security & Telemetry
@@ -45,12 +45,12 @@ import FleetMatrixTable from '../components/FleetMatrixTable.astro';
       </div>
     </section>
 
-    <!-- Top-Level Health Bar & Fleet Status (Step 18) -->
+    <!-- Top-Level Health Bar & Fleet Status -->
     <section id="health-bar-section">
       <HealthBar />
     </section>
 
-    <!-- Fleet Matrix Table (Step 19) -->
+    <!-- Fleet Matrix Table -->
     <section id="matrix-section">
       <FleetMatrixTable />
     </section>
@@ -94,4 +94,43 @@ import FleetMatrixTable from '../components/FleetMatrixTable.astro';
       </div>
     </section>
   </div>
+
+<script>
+  function setupFleetSyncButton() {
+    const btn = document.getElementById('sync-button');
+    const spinner = document.getElementById('sync-spinner');
+
+    btn.addEventListener('click', async () => {
+      btn.setAttribute('disabled', 'true');
+      btn.classList.add('opacity-75', 'cursor-not-allowed');
+      spinner?.classList.remove('hidden');
+
+      try {
+        const resp = await fetch('/api/v1/tailscale/sync', { method: 'POST' });
+        if (resp.ok) {
+          // Trigger refresh on Fleet Matrix Table
+          const matrixRefreshBtn = document.getElementById('btn-refresh-matrix');
+          matrixRefreshBtn?.click();
+
+          // Trigger refresh on Health Bar
+          const healthRefreshBtn = document.getElementById('btn-refresh-health');
+          healthRefreshBtn?.click();
+        }
+      } catch (err) {
+        console.error('Fleet sync failed:', err);
+      } finally {
+        spinner?.classList.add('hidden');
+        btn.removeAttribute('disabled');
+        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFleetSyncButton);
+  } else {
+    setupFleetSyncButton();
+  }
+</script>
+
 </Layout>

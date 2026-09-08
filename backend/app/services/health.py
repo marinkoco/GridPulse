@@ -105,15 +105,15 @@ async def get_aggregated_health_statistics(
     up_to_date_count = 0
     outdated_count = 0
     for node in nodes:
-        drift = evaluate_version_drift(node.client_version, target_stable_version=target_version)
-        if drift["is_outdated"]:
+        drift = evaluate_version_drift(node.client_version, stable_version=target_version)
+        if drift["is_behind"]:
             outdated_count += 1
         else:
             up_to_date_count += 1
 
     drift_pct = round((outdated_count / total_nodes) * 100.0, 2) if total_nodes > 0 else 0.0
     version_drift_summary = HealthSummaryVersionDrift(
-        target_stable_version=target_version,
+        stable_version=target_version,
         up_to_date_count=up_to_date_count,
         outdated_count=outdated_count,
         drift_percentage=drift_pct,

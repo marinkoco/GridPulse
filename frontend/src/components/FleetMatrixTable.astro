@@ -423,9 +423,7 @@ const quarantinedCount = nodes.filter((n) => n.is_quarantined || n.is_locked_out
       <div>
         <div class="flex items-center gap-2.5">
           <h2 class="text-xl font-bold text-white tracking-tight">Fleet Matrix Table</h2>
-          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            Step 19
-          </span>
+          
         </div>
         <p class="text-xs text-slate-400 mt-1">
           Multidimensional matrix monitoring machine OS, device posture compliance, geolocation anomalies, and Tailnet Lock quarantine status across all active endpoints.
@@ -554,6 +552,15 @@ const quarantinedCount = nodes.filter((n) => n.is_quarantined || n.is_locked_out
         >
           <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
           <span>Non-Compliant Only</span>
+        </button>
+        <button
+          type="button"
+          id="btn-filter-expired-keys"
+          class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center gap-1.5"
+          data-active="false"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+          <span>Expired Keys Only</span>
         </button>
         <button
           type="button"
@@ -933,6 +940,7 @@ const quarantinedCount = nodes.filter((n) => n.is_quarantined || n.is_locked_out
     geoAnomalyOnly: boolean;
     quarantineOnly: boolean;
     nonCompliantOnly: boolean;
+  expiredKeysOnly: boolean;
     sortBy: string;
     sortAsc: boolean;
     nodes: NodeMatrixItem[];
@@ -946,6 +954,7 @@ const quarantinedCount = nodes.filter((n) => n.is_quarantined || n.is_locked_out
     geoAnomalyOnly: false,
     quarantineOnly: false,
     nonCompliantOnly: false,
+  expiredKeysOnly: false,
     sortBy: 'hostname',
     sortAsc: true,
     nodes: [],
@@ -1032,6 +1041,7 @@ const quarantinedCount = nodes.filter((n) => n.is_quarantined || n.is_locked_out
       state.geoAnomalyOnly = false;
       state.quarantineOnly = false;
       state.nonCompliantOnly = false;
+      state.expiredKeysOnly = false;
 
       if (searchInput) searchInput.value = '';
       if (osSelect) osSelect.value = '';
@@ -1041,6 +1051,7 @@ const quarantinedCount = nodes.filter((n) => n.is_quarantined || n.is_locked_out
       if (btnGeoAnomaly) updateToggleButton(btnGeoAnomaly, false, '');
       if (btnQuarantine) updateToggleButton(btnQuarantine, false, '');
       if (btnNonCompliant) updateToggleButton(btnNonCompliant, false, '');
+      if (btnExpiredKeys) updateToggleButton(btnExpiredKeys, false, '');
 
       applyFiltersAndRender();
     };

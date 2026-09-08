@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 import ipaddress
 import re
 from typing import Any, Dict, List, Optional, Self
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, BeforeValidator, model_validator
+from typing_extensions import Annotated
 
 
 class DerpLatencyInfo(BaseModel):
@@ -85,6 +86,16 @@ def is_internal_ip(ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address) -> boo
     return any(ip_obj in net for net in _INTERNAL_NETWORKS)
 
 
+def _empty_string_to_none(v: Any) -> Any:
+    """Coerces empty strings or whitespace-only strings into None for datetime/optional fields."""
+    if v == "" or (isinstance(v, str) and not v.strip()):
+        return None
+    return v
+
+
+OptionalDatetime = Annotated[Optional[datetime], BeforeValidator(_empty_string_to_none)]
+
+
 class TailscaleDevice(BaseModel):
     """Pydantic model representing a single Tailscale device node payload."""
 
@@ -106,10 +117,10 @@ class TailscaleDevice(BaseModel):
     machine_key: Optional[str] = Field(None, alias="machineKey")
     node_key: Optional[str] = Field(None, alias="nodeKey")
     key_expiry_disabled: bool = Field(False, alias="keyExpiryDisabled")
-    expires: Optional[datetime] = None
-    key_expiry: Optional[datetime] = Field(None, alias="keyExpiry")
-    last_seen: Optional[datetime] = Field(None, alias="lastSeen")
-    created: Optional[datetime] = None
+    expires: OptionalDatetime = None
+    key_expiry: OptionalDatetime = Field(None, alias="keyExpiry")
+    last_seen: OptionalDatetime = Field(None, alias="lastSeen")
+    created: OptionalDatetime = None
     update_available: bool = Field(False, alias="updateAvailable")
     blocks_incoming_connections: bool = Field(False, alias="blocksIncomingConnections")
     online: Optional[bool] = None
@@ -171,13 +182,7 @@ class TailscaleDevice(BaseModel):
         return []
 
     def get_exposed_routes(self) -> List[str]:
-        """Extracts advertised/exposed CIDR routes from device attributes or top-level fields.
-
-        Checks:
-        1. Explicit self.exposed_routes list field (alias exposedRoutes).
-        2. device.attributes['exposedRoutes'] or ['exposed_routes'] or ['advertisedRoutes'] or ['routes'].
-        3. device.tags matching 'route:<cidr>' or 'exposed-route:<cidr>'.
-        """
+        """Extracts advertised/exposed CIDR routes from device attributes or top-level fields."""
         routes: List[str] = []
         if self.exposed_routes:
             for r in self.exposed_routes:
@@ -269,10 +274,7 @@ class TailscaleDevice(BaseModel):
         return None
 
     def get_node_ts_version_attribute(self) -> Optional[str]:
-        """Extracts the 'node:tsVersion' posture attribute if present in attributes or tags.
-
-        Falls back to client_version or client_connectivity running_version.
-        """
+        """Extracts the 'node:tsVersion' posture attribute if present in attributes or tags."""
         if self.attributes:
             for k, v in self.attributes.items():
                 if (
@@ -299,12 +301,7 @@ class TailscaleDevice(BaseModel):
         return None
 
     def get_node_auto_update_attribute(self) -> Optional[bool]:
-        """Extracts the 'node:tsAutoUpdate' posture attribute.
-
-        Checks:
-        1. device.attributes for keys matching 'node:tsautoupdate', 'tsautoupdate', 'autoupdate', etc.
-        2. device.tags for 'node:tsautoupdate:<bool>', 'tag:auto-update', 'tag:no-auto-update', etc.
-        """
+        """Extracts the 'node:tsAutoUpdate' posture attribute."""
         if self.attributes:
             for k, v in self.attributes.items():
                 k_norm = k.lower().replace(":", "_").replace("-", "_")
@@ -340,12 +337,7 @@ class TailscaleDevice(BaseModel):
         return None
 
     def get_node_state_encrypted_attribute(self) -> Optional[bool]:
-        """Extracts the 'node:tsStateEncrypted' posture attribute.
-
-        Checks:
-        1. device.attributes for keys matching 'node:tsstateencrypted', 'tsstateencrypted', 'state_encrypted', etc.
-        2. device.tags for 'node:tsstateencrypted:<bool>', 'tag:state-encrypted', 'tag:unencrypted-state', etc.
-        """
+        """Extracts the 'node:tsStateEncrypted' posture attribute."""
         if self.attributes:
             for k, v in self.attributes.items():
                 k_norm = k.lower().replace(":", "_").replace("-", "_")
@@ -383,12 +375,7 @@ class TailscaleDevice(BaseModel):
         return None
 
     def get_node_country_attribute(self) -> Optional[str]:
-        """Extracts the 'ip:country' posture attribute from device attributes or tags.
-
-        Checks:
-        1. device.attributes for keys matching 'ip:country', 'ip_country', 'country', 'countryCode', etc.
-        2. device.tags for 'ip:country:<val>', 'country:<val>', 'tag:country:<val>', etc.
-        """
+        """Extracts the 'ip:country' posture attribute from device attributes or tags."""
         if self.attributes:
             for k, v in self.attributes.items():
                 k_norm = k.lower().replace(":", "_").replace("-", "_")
@@ -418,13 +405,7 @@ class TailscaleDevice(BaseModel):
         return None
 
     def get_node_public_address_attribute(self) -> Optional[str]:
-        """Extracts the 'ip:publicAddress' posture attribute from device attributes, tags, or endpoints.
-
-        Checks:
-        1. device.attributes for keys matching 'ip:publicAddress', 'ip_public_address', 'publicAddress', etc.
-        2. device.tags for 'ip:publicaddress:<val>', 'ip:public_address:<val>', 'public-ip:<val>', etc.
-        3. Discovered network endpoints (endpoints or client_connectivity.endpoints), stripping port.
-        """
+        """Extracts the 'ip:publicAddress' posture attribute from device attributes, tags, or endpoints."""
         if self.attributes:
             for k, v in self.attributes.items():
                 k_norm = k.lower().replace(":", "_").replace("-", "_")
@@ -462,7 +443,6 @@ class TailscaleDevice(BaseModel):
             if not isinstance(ep, str) or not ep.strip():
                 continue
             ep_clean = ep.strip()
-            # Extract IP address, stripping port if present
             raw_ip = ep_clean
             if ep_clean.startswith("[") and "]" in ep_clean:
                 raw_ip = ep_clean[1 : ep_clean.index("]")]
@@ -644,13 +624,7 @@ class TailscaleDevice(BaseModel):
         return False
 
     def check_is_online(self, threshold_seconds: int = 300) -> bool:
-        """Determines online status based on explicit flags or last_seen recency (default: 5 minutes).
-
-        Priority:
-        1. Explicit `online` boolean if present in device payload.
-        2. `connectedToControl` boolean if reported by Tailscale.
-        3. Recency of `last_seen` timestamp within `threshold_seconds`.
-        """
+        """Determines online status based on explicit flags or last_seen recency (default: 5 minutes)."""
         if self.online is not None:
             return bool(self.online)
         if self.connected_to_control is not None:

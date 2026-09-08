@@ -208,7 +208,7 @@ const hasOfflineNodes = stats.fleet.offline_devices > 0;
 
       <!-- TILE 2: EXPIRING KEYS VISUAL DISPLAY -->
       <div
-        id="card-expiring-keys"
+        id="card-expiring-keys" role="button" tabindex="0" title="Click to filter fleet by expiring/expired keys"
         class={`relative rounded-xl p-4 border transition-all ${
           stats.key_expiry.expired_count > 0
             ? 'bg-red-950/25 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]'
@@ -684,4 +684,32 @@ const hasOfflineNodes = stats.fleet.offline_devices > 0;
     // Poll every 15 seconds
     setInterval(fetchHealthStats, 15000);
   });
+</script>
+
+<script>
+  function setupHealthBarClickHandlers() {
+    const cardKeys = document.getElementById('card-expiring-keys');
+    cardKeys?.classList.add('cursor-pointer', 'hover:ring-2', 'hover:ring-red-500/50', 'hover:scale-[1.01]', 'transition-all');
+    
+    const triggerFilter = () => {
+      window.dispatchEvent(new CustomEvent('gridpulse:filter-expired-keys'));
+    };
+
+    cardKeys?.addEventListener('click', triggerFilter);
+
+    // Also delegate click if user clicks key_expiry alerts in active alerts banner
+    const container = document.getElementById('health-bar-container');
+    container?.addEventListener('click', (e) => {
+      const target = e.target;
+      if (target && target.closest('[data-category="key_expiry"], .alert-item-key_expiry')) {
+        triggerFilter();
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupHealthBarClickHandlers);
+  } else {
+    setupHealthBarClickHandlers();
+  }
 </script>
