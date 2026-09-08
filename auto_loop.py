@@ -43,14 +43,14 @@ def get_recent_history():
     recent = completed[-2:]
     return "\n".join([f"✓ {t}" for t in recent])
 
-def run_agent(model, prompt, effort="high", skip_perms=True):
+def run_agent(model, prompt, effort="high", skip_perms=False):
     """
     Executes the Antigravity CLI using raw shell execution.
     shlex.quote() safely wraps the massive multi-line prompt so bash doesn't choke.
     """
     safe_prompt = shlex.quote(prompt)
     
-    # Build the exact bash command, now including the required --effort flag!
+    # Build the exact bash command, including the required --effort flag
     cmd_str = f"rtk agy --model {model} --effort {effort} -p {safe_prompt}"
     
     if skip_perms:
@@ -108,8 +108,9 @@ Do NOT write code blindly. You have Serena MCP tools available.
 1. FIRST, use your `list_dir` or `read_file` tools to inspect the files created in the recently completed steps. Or use `git log -n 3` to understand recent changes.
 2. Analyze their variables, classes, and structure.
 3. THEN, execute the necessary code, terminal commands, or file creations to complete the Current Task so it perfectly integrates with the existing codebase.
+4. SECURITY ENFORCEMENT: NEVER hardcode real API keys, passwords, or secrets. When writing tests for external APIs (like Tailscale), you MUST use `unittest.mock` or `pytest-mock` to mock the HTTP responses.
 """
-            # Call Flash with effort="high"
+            # Call Flash with effort="high" and permissions enabled
             draft = run_agent("gemini-3.8-flash", doer_prompt, effort="high", skip_perms=True)
             
             print(f"  ▶️ Checking work (Checker: Pro)...")
@@ -121,7 +122,7 @@ If it fails, output 'REJECTED' and explain what the developer must fix.
 Developer's output report: 
 {draft}
 """
-            # Call Pro with effort="high"
+            # Call Pro with effort="high" and permissions enabled to allow auditing commands
             eval_result = run_agent("gemini-3.1-pro", checker_prompt, effort="high", skip_perms=True)
             
             if "APPROVED" in eval_result:
