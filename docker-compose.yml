@@ -1,4 +1,7 @@
 services:
+  # ==========================================
+  # PostgreSQL Database Service
+  # ==========================================
   db:
     image: postgres:16-alpine
     container_name: gridpulse-postgres
@@ -21,6 +24,106 @@ services:
       retries: 5
       start_period: 10s
 
+  # ==========================================
+  # FastAPI Backend Service
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gridpulse-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-gridpulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gridpulse_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-gridpulse}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-gridpulse}:${POSTGRES_PASSWORD:-gridpulse_secret}@db:5432/${POSTGRES_DB:-gridpulse}
+      TAILSCALE_API_KEY: ${TAILSCALE_API_KEY:-}
+      TAILSCALE_TAILNET: ${TAILSCALE_TAILNET:-}
+      TAILSCALE_BASE_URL: ${TAILSCALE_BASE_URL:-https://api.tailscale.com}
+      TAILSCALE_WEBHOOK_SECRET: ${TAILSCALE_WEBHOOK_SECRET:-}
+      TAILSCALE_WEBHOOK_TOLERANCE_SECONDS: ${TAILSCALE_WEBHOOK_TOLERANCE_SECONDS:-300}
+      TAILSCALE_WEBHOOK_VERIFY_SIGNATURE: ${TAILSCALE_WEBHOOK_VERIFY_SIGNATURE:-true}
+      TAILSCALE_WEBHOOK_AUTO_FETCH_ACL: ${TAILSCALE_WEBHOOK_AUTO_FETCH_ACL:-true}
+      TAILSCALE_POLL_INTERVAL_MINUTES: ${TAILSCALE_POLL_INTERVAL_MINUTES:-10}
+      TAILSCALE_POLL_ENABLED: ${TAILSCALE_POLL_ENABLED:-true}
+      TAILSCALE_POLL_ON_STARTUP: ${TAILSCALE_POLL_ON_STARTUP:-false}
+      TAILSCALE_STABLE_VERSION: ${TAILSCALE_STABLE_VERSION:-1.60.0}
+      KEY_EXPIRY_WARNING_DAYS: ${KEY_EXPIRY_WARNING_DAYS:-14}
+      KEY_EXPIRY_CRITICAL_DAYS: ${KEY_EXPIRY_CRITICAL_DAYS:-3}
+      ALLOW_UNTAGGED_EXIT_NODES: ${ALLOW_UNTAGGED_EXIT_NODES:-false}
+      DERP_LATENCY_THRESHOLD_MS: ${DERP_LATENCY_THRESHOLD_MS:-150.0}
+      POSTURE_REQUIRE_AUTO_UPDATE: ${POSTURE_REQUIRE_AUTO_UPDATE:-true}
+      POSTURE_REQUIRE_STATE_ENCRYPTED: ${POSTURE_REQUIRE_STATE_ENCRYPTED:-true}
+      POSTURE_STRICT_MODE: ${POSTURE_STRICT_MODE:-false}
+      POSTURE_AUTO_UPDATE_SEVERITY: ${POSTURE_AUTO_UPDATE_SEVERITY:-high}
+      POSTURE_STATE_ENCRYPTED_SEVERITY: ${POSTURE_STATE_ENCRYPTED_SEVERITY:-critical}
+      GEOLOCATION_TRACKING_ENABLED: ${GEOLOCATION_TRACKING_ENABLED:-true}
+      IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH: ${IMPOSSIBLE_TRAVEL_SPEED_THRESHOLD_KMH:-800.0}
+      IMPOSSIBLE_TRAVEL_MIN_DISTANCE_KM: ${IMPOSSIBLE_TRAVEL_MIN_DISTANCE_KM:-100.0}
+      IMPOSSIBLE_TRAVEL_MIN_TIME_SECONDS: ${IMPOSSIBLE_TRAVEL_MIN_TIME_SECONDS:-60.0}
+      IMPOSSIBLE_TRAVEL_SEVERITY: ${IMPOSSIBLE_TRAVEL_SEVERITY:-critical}
+      GEOLOCATION_ALERT_ON_COUNTRY_CHANGE: ${GEOLOCATION_ALERT_ON_COUNTRY_CHANGE:-false}
+      TAILNET_LOCK_ENABLED: ${TAILNET_LOCK_ENABLED:-true}
+      TAILNET_LOCK_ALERT_ON_LOCKED_OUT: ${TAILNET_LOCK_ALERT_ON_LOCKED_OUT:-true}
+      TAILNET_LOCK_ALERT_ON_UNSIGNED: ${TAILNET_LOCK_ALERT_ON_UNSIGNED:-true}
+      TAILNET_LOCK_ALERT_ON_KEY_ROTATION: ${TAILNET_LOCK_ALERT_ON_KEY_ROTATION:-true}
+      TAILNET_LOCK_LOCKED_OUT_SEVERITY: ${TAILNET_LOCK_LOCKED_OUT_SEVERITY:-critical}
+      TAILNET_LOCK_UNSIGNED_SEVERITY: ${TAILNET_LOCK_UNSIGNED_SEVERITY:-high}
+      MAGICDNS_SSL_MONITOR_ENABLED: ${MAGICDNS_SSL_MONITOR_ENABLED:-true}
+      MAGICDNS_SSL_POLL_INTERVAL_MINUTES: ${MAGICDNS_SSL_POLL_INTERVAL_MINUTES:-60}
+      MAGICDNS_SSL_PORT: ${MAGICDNS_SSL_PORT:-443}
+      MAGICDNS_SSL_TIMEOUT_SECONDS: ${MAGICDNS_SSL_TIMEOUT_SECONDS:-10.0}
+      MAGICDNS_SSL_EXPIRY_WARNING_DAYS: ${MAGICDNS_SSL_EXPIRY_WARNING_DAYS:-30}
+      MAGICDNS_SSL_EXPIRY_CRITICAL_DAYS: ${MAGICDNS_SSL_EXPIRY_CRITICAL_DAYS:-7}
+      MAGICDNS_SSL_CONCURRENCY_LIMIT: ${MAGICDNS_SSL_CONCURRENCY_LIMIT:-10}
+      MAGICDNS_SSL_VERIFY_TLS: ${MAGICDNS_SSL_VERIFY_TLS:-true}
+      MAGICDNS_SSL_ALERT_ON_EXPIRY: ${MAGICDNS_SSL_ALERT_ON_EXPIRY:-true}
+      CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:4321","http://127.0.0.1:4321"]'
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    networks:
+      - gridpulse-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ==========================================
+  # Astro Frontend Service
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+    container_name: gridpulse-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - gridpulse-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+# ==========================================
+# Persistent Volumes & Bridge Network
+# ==========================================
 volumes:
   postgres_data:
     driver: local
