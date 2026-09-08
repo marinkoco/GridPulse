@@ -43,7 +43,7 @@ def get_recent_history():
     recent = completed[-2:]
     return "\n".join([f"✓ {t}" for t in recent])
 
-def run_agent(model, prompt, effort="high", skip_perms=False):
+def run_agent(model, prompt, effort="high", skip_perms=True):
     """
     Executes the Antigravity CLI using raw shell execution.
     shlex.quote() safely wraps the massive multi-line prompt so bash doesn't choke.
@@ -122,7 +122,7 @@ Developer's output report:
 {draft}
 """
             # Call Pro with effort="high"
-            eval_result = run_agent("gemini-3.1-pro", checker_prompt, effort="high")
+            eval_result = run_agent("gemini-3.1-pro", checker_prompt, effort="high", skip_perms=True)
             
             if "APPROVED" in eval_result:
                 print("  ✅ APPROVED!")
