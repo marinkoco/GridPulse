@@ -64,3 +64,6 @@ ehthumbs.db
 *.swp
 *.swo
 *~
+# Local workspace scripts
+autonomous_loop.py
+project_state.md
