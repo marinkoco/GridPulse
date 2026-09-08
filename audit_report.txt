@@ -42,3 +42,24 @@ Step 15: Implement HMAC signature verification on the webhook listener by splitt
 - Integrated verification into `process_tailscale_webhook` pipeline and FastAPI webhook routes, returning HTTP 401 on missing/invalid signature or expired timestamp
 - Added comprehensive test suite in `backend/tests/test_webhook.py` covering header splitting, HMAC calculation, timestamp tolerance, tampered payloads/timestamps, and endpoint integration
 - All 230 unit and integration tests passing
+
+Step 16: Build the REST API routes in FastAPI to expose aggregated health statistics, the fleet matrix, and the chronologically ordered audit log feed.
+- Built `/api/v1/fleet/health` endpoint returning comprehensive health statistics across connectivity, posture compliance, key expiration, lock status, TLS certs, and active alerts
+- Built `/api/v1/fleet/matrix` and `/api/v1/fleet/matrix/summary` endpoints with multidimensional attribute aggregation, filtering, and sorting
+- Built `/api/v1/audit/feed` and `/api/v1/fleet/nodes/{node_id}/audit-feed` endpoints supporting chronological ordering, full-text search, category/severity filtering, and summary breakdowns
+- All 230 unit and integration tests passing
+
+Step 17: Initialize the Astro and Tailwind CSS frontend workspace, configuring the Node.js environment and strict TypeScript interfaces for the FastAPI backend responses.
+- Initialized Astro 5.x project with `@astrojs/tailwind` and TypeScript in `frontend/`
+- Defined strict TypeScript schemas mirroring FastAPI Pydantic models in `frontend/src/types/`
+- Implemented typed API service layer in `frontend/src/services/api.ts` covering health, matrix, audit, and security endpoints
+- Astro check and TypeScript validation passing with 0 errors
+
+Step 18: Develop the top-level Health Bar and Audit Log Feed components in Astro to visually display offline nodes, expiring keys, and real-time webhook events.
+- Created `HealthBar.astro` component displaying overall health score, node availability (highlighting offline nodes with alerts), auth key expiration status (highlighting keys expiring <7d, <14d, or expired), posture compliance, and expandable active alerts banner
+- Created `AuditFeed.astro` component displaying real-time webhook events (`⚡ WEBHOOK` badges), node transitions, key expiry alerts, and security events
+- Implemented client-side live polling (8s auto-refresh with Pause/Resume toggle and manual refresh)
+- Added category filters (Webhooks Only, Security, Nodes, ACL, Posture), severity filter, and full-text search
+- Built `formatters.ts` with human-friendly relative time, datetime tooltips, webhook detection, and consistent severity styling
+- Verified Astro diagnostics (`astro check`), strict type-checking (`tsc --noEmit`), and production build (`astro build`) passing with 0 errors and 0 warnings
+

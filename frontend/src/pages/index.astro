@@ -1,0 +1,97 @@
+---
+import Layout from '../layouts/Layout.astro';
+import HealthBar from '../components/HealthBar.astro';
+import AuditFeed from '../components/AuditFeed.astro';
+import FleetMatrixTable from '../components/FleetMatrixTable.astro';
+---
+
+<Layout title="GridPulse Dashboard - Tailscale Fleet Telemetry">
+  <div class="space-y-8">
+    <!-- Hero / Welcome Banner -->
+    <section id="overview" class="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800/80 border border-slate-800 p-6 sm:p-8 shadow-xl">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-3">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            Fleet Matrix & Security Telemetry Active (Step 19)
+          </div>
+          <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+            Tailscale Fleet Security & Telemetry
+          </h1>
+          <p class="mt-2 text-slate-400 max-w-2xl text-sm sm:text-base">
+            Aggregated health statistics, multi-dimensional fleet matrix, device posture compliance, geolocation anomaly tracking, and Tailnet Lock quarantine status powered by Astro, Tailwind CSS, and FastAPI.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+          <button
+            id="sync-button"
+            class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+          >
+            <svg class="w-4 h-4 mr-2 animate-spin hidden" id="sync-spinner" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Trigger Fleet Sync
+          </button>
+          <a
+            href="/api/v1/health"
+            target="_blank"
+            class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all"
+          >
+            Backend API Docs
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Top-Level Health Bar & Fleet Status (Step 18) -->
+    <section id="health-bar-section">
+      <HealthBar />
+    </section>
+
+    <!-- Fleet Matrix Table (Step 19) -->
+    <section id="matrix-section">
+      <FleetMatrixTable />
+    </section>
+
+    <!-- Audit Feed & Telemetry Modules -->
+    <section id="audit" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2">
+        <AuditFeed />
+      </div>
+
+      <!-- Quick Architecture / Tech Stack Info -->
+      <div class="rounded-xl bg-slate-900/70 border border-slate-800 p-5 shadow-sm space-y-4">
+        <h3 class="font-bold text-white text-base">Frontend Architecture</h3>
+        <ul class="space-y-2.5 text-xs text-slate-300">
+          <li class="flex items-start gap-2">
+            <span class="text-emerald-400 font-bold">✓</span>
+            <div><strong class="text-white">Astro 5.x:</strong> Islands architecture and server-rendered components.</div>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-emerald-400 font-bold">✓</span>
+            <div><strong class="text-white">Tailwind CSS:</strong> Utility-first responsive styling with dark theme support.</div>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-emerald-400 font-bold">✓</span>
+            <div><strong class="text-white">Strict TypeScript:</strong> Exact interfaces mirroring FastAPI Pydantic schemas.</div>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-emerald-400 font-bold">✓</span>
+            <div><strong class="text-white">Fleet Matrix Table:</strong> Machine OS, posture compliance, geo anomalies, and quarantine tracking.</div>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-emerald-400 font-bold">✓</span>
+            <div><strong class="text-white">Health Bar & Audit Feed:</strong> Top-level fleet health statistics and real-time webhook audit stream.</div>
+          </li>
+        </ul>
+
+        <div class="pt-4 border-t border-slate-800 text-[11px] text-slate-500 space-y-1">
+          <div>Workspace: <code class="text-slate-400 font-mono">frontend/</code></div>
+          <div>Node.js Environment: <code class="text-slate-400 font-mono">v20.19.2</code></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</Layout>

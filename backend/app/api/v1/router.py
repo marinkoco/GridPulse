@@ -1,8 +1,20 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.database import get_db
+from app.services.audit import (
+    get_chronological_audit_log_feed,
+    get_node_audit_log_feed,
+)
+from app.services.fleet_matrix import (
+    get_fleet_matrix,
+    get_fleet_matrix_summary,
+)
+from app.services.health import (
+    get_aggregated_health_statistics,
+)
 from app.services.fleet import (
     get_fleet_os_distribution,
     get_fleet_uptime_overview,
@@ -456,5 +468,161 @@ async def v1_webhooks_status(
 ):
     """Returns operational status, security verification config, and event statistics for the webhook listener."""
     return await get_webhook_listener_status(session=db)
+
+
+# ---------------------------------------------------------------------------
+# Aggregated Health Statistics (Step 16)
+# ---------------------------------------------------------------------------
+
+
+@api_router.get("/fleet/health", tags=["Health", "Fleet"])
+@api_router.get("/fleet/health-stats", tags=["Health", "Fleet"])
+@api_router.get("/fleet/health/stats", tags=["Health", "Fleet"])
+@api_router.get("/health/stats", tags=["Health", "Fleet"])
+@api_router.get("/health/aggregated", tags=["Health", "Fleet"])
+async def v1_fleet_health_stats(
+    request: Request,
+    tailnet: Optional[str] = Query(None, description="Filter statistics by tailnet domain"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns aggregated health statistics, security compliance, key status, lock state, TLS certs, and background services."""
+    scheduler = getattr(request.app.state, "scheduler", None)
+    return await get_aggregated_health_statistics(
+        session=db, tailnet=tailnet, scheduler_instance=scheduler
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fleet Matrix (Step 16)
+# ---------------------------------------------------------------------------
+
+
+@api_router.get("/fleet/matrix", tags=["Fleet", "Matrix"])
+@api_router.get("/fleet/nodes/matrix", tags=["Fleet", "Matrix"])
+@api_router.get("/matrix", tags=["Fleet", "Matrix"])
+async def v1_fleet_matrix(
+    tailnet: Optional[str] = Query(None, description="Filter fleet by tailnet domain"),
+    status: Optional[str] = Query(None, description="Filter by status ('online', 'offline', 'all')"),
+    os: Optional[str] = Query(None, description="Filter by OS family (e.g. 'linux', 'macos', 'windows')"),
+    compliance: Optional[str] = Query(None, description="Filter by compliance status ('compliant', 'non_compliant')"),
+    category: Optional[str] = Query(None, description="Filter by device category ('server', 'workstation', 'mobile', etc.)"),
+    locked_out: Optional[bool] = Query(None, description="Filter by Tailnet Lock lockout status"),
+    quarantined: Optional[bool] = Query(None, description="Filter by Tailnet Lock quarantine status"),
+    geo_anomaly: Optional[bool] = Query(None, description="Filter by impossible travel geolocation anomaly status"),
+    exit_node: Optional[bool] = Query(None, description="Filter by exit node advertisement"),
+    q: Optional[str] = Query(None, description="Search query matching hostname, name, user, IP, or tag"),
+    sort_by: str = Query("hostname", description="Field to sort by (hostname, name, os, client_version, last_seen, latency_ms, health_score)"),
+    order: str = Query("asc", description="Sort direction ('asc' or 'desc')"),
+    limit: int = Query(50, ge=1, le=500, description="Max devices to return"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns multidimensional fleet matrix across all telemetry domains with filtering, sorting, pagination, and cross-tabulations."""
+    return await get_fleet_matrix(
+        session=db,
+        tailnet=tailnet,
+        status=status,
+        os=os,
+        compliance=compliance,
+        category=category,
+        locked_out=locked_out,
+        quarantined=quarantined,
+        geo_anomaly=geo_anomaly,
+        exit_node=exit_node,
+        q=q,
+        sort_by=sort_by,
+        order=order,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@api_router.get("/fleet/matrix/summary", tags=["Fleet", "Matrix"])
+@api_router.get("/fleet/matrix/grid", tags=["Fleet", "Matrix"])
+async def v1_fleet_matrix_summary(
+    tailnet: Optional[str] = Query(None, description="Filter fleet by tailnet domain"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns lightweight 2D cross-tabulation summary matrix breakdown across OS, status, and compliance."""
+    return await get_fleet_matrix_summary(session=db, tailnet=tailnet)
+
+
+# ---------------------------------------------------------------------------
+# Chronologically Ordered Audit Log Feed (Step 16)
+# ---------------------------------------------------------------------------
+
+
+@api_router.get("/audit/feed", tags=["Audit", "Security", "Fleet"])
+@api_router.get("/audit/logs", tags=["Audit", "Security", "Fleet"])
+@api_router.get("/audit", tags=["Audit", "Security", "Fleet"])
+@api_router.get("/fleet/audit-feed", tags=["Audit", "Security", "Fleet"])
+@api_router.get("/fleet/audit-logs", tags=["Audit", "Security", "Fleet"])
+async def v1_audit_feed(
+    node_id: Optional[str] = Query(None, description="Filter by target node identifier"),
+    tailnet: Optional[str] = Query(None, description="Filter by tailnet domain"),
+    severity: Optional[str] = Query(None, description="Filter by severity ('info', 'low', 'warning', 'high', 'error', 'critical')"),
+    category: Optional[str] = Query(None, description="Filter by event category ('device', 'posture', 'security', 'network', 'acl', 'system')"),
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    actor: Optional[str] = Query(None, description="Filter by actor name or email"),
+    since: Optional[datetime] = Query(None, description="Filter events on or after this timestamp"),
+    until: Optional[datetime] = Query(None, description="Filter events on or before this timestamp"),
+    q: Optional[str] = Query(None, description="Search term in action, message, or actor"),
+    order: str = Query("desc", description="Chronological ordering: 'desc' (newest first) or 'asc' (oldest first)"),
+    limit: int = Query(50, ge=1, le=1000, description="Max audit events to retrieve"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns chronologically ordered audit log feed with multi-domain filtering, full-text search, and summary counters."""
+    return await get_chronological_audit_log_feed(
+        session=db,
+        node_id=node_id,
+        tailnet=tailnet,
+        severity=severity,
+        event_category=category,
+        event_type=event_type,
+        actor=actor,
+        since=since,
+        until=until,
+        q=q,
+        order=order,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@api_router.get("/fleet/nodes/{node_id}/audit-feed", tags=["Audit", "Security", "Fleet"])
+@api_router.get("/fleet/nodes/{node_id}/audit", tags=["Audit", "Security", "Fleet"])
+@api_router.get("/fleet/nodes/{node_id}/audit-logs", tags=["Audit", "Security", "Fleet"])
+async def v1_node_audit_feed(
+    node_id: str,
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    category: Optional[str] = Query(None, description="Filter by event category"),
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    since: Optional[datetime] = Query(None, description="Filter events on or after this timestamp"),
+    until: Optional[datetime] = Query(None, description="Filter events on or before this timestamp"),
+    q: Optional[str] = Query(None, description="Search term in action, message, or actor"),
+    order: str = Query("desc", description="Chronological ordering: 'desc' or 'asc'"),
+    limit: int = Query(50, ge=1, le=1000, description="Max audit events to retrieve"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returns chronological audit log feed for a specific node."""
+    result = await get_node_audit_log_feed(
+        session=db,
+        node_id=node_id,
+        severity=severity,
+        event_category=category,
+        event_type=event_type,
+        since=since,
+        until=until,
+        q=q,
+        order=order,
+        limit=limit,
+        offset=offset,
+    )
+    if isinstance(result, dict) and result.get("error") == "node_not_found":
+        raise HTTPException(status_code=404, detail=f"Node '{node_id}' not found")
+    return result
+
 
 

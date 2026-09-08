@@ -1,0 +1,1656 @@
+---
+import type { FleetMatrixResponse, NodeMatrixItem, DeviceCategory } from '../types';
+import {
+  getOsBadgeInfo,
+  getPostureBadgeInfo,
+  getGeoBadgeInfo,
+  getTailnetLockBadgeInfo,
+  getKeyExpiryBadgeInfo,
+  getHealthScoreColor,
+  formatDateTime,
+  formatRelativeTime,
+} from '../utils/formatters';
+
+interface Props {
+  initialMatrix?: FleetMatrixResponse | null;
+  tailnet?: string;
+}
+
+const { initialMatrix = null, tailnet } = Astro.props;
+
+// High-fidelity fallback/SSR nodes showcasing OS, Posture, Geo Anomalies, and Tailnet Lock Quarantine
+const sampleNodes: NodeMatrixItem[] = [
+  {
+    id: 'node-01-gw-edge',
+    node_id: 'node-01-gw-edge',
+    name: 'Edge Gateway 01',
+    hostname: 'gw-edge-prod-01',
+    user: 'infra-admin@corp.tailscale',
+    tailnet: tailnet || 'default',
+    addresses: ['100.64.0.1', 'fd7a:115c:a1e0::1'],
+    tags: ['tag:prod', 'tag:gateway', 'tag:exit-node'],
+    os: 'Linux',
+    os_raw: 'Linux 6.8.0-generic',
+    os_version: 'Ubuntu 24.04 LTS',
+    client_version: '1.60.0',
+    category: 'server',
+    is_online: true,
+    last_seen: new Date().toISOString(),
+    streak_duration_seconds: 345600,
+    streak_duration_human: '4d 0h',
+    is_compliant: true,
+    compliance_status: 'compliant',
+    violations: [],
+    update_available: false,
+    key_expiry_disabled: true,
+    expires_at: null,
+    key_expiry_status: 'healthy',
+    days_until_key_expiry: null,
+    is_exit_node: true,
+    exposed_routes: ['10.0.0.0/16', '0.0.0.0/0'],
+    derp_region: 'ord (Chicago)',
+    latency_ms: 18.2,
+    country: 'US',
+    public_address: '198.51.100.12',
+    country_name: 'United States',
+    is_impossible_travel: false,
+    geo_anomaly_reason: null,
+    tailnet_lock_status: 'signed',
+    is_locked_out: false,
+    is_quarantined: false,
+    is_signing_node: false,
+    magicdns_domain: 'gw-edge-prod-01.corp.ts.net',
+    ssl_cert_status: 'valid',
+    ssl_cert_expires_at: new Date(Date.now() + 85 * 86400 * 1000).toISOString(),
+    is_ssl_cert_expiring: false,
+    is_ssl_cert_expired: false,
+    health_status: 'healthy',
+    health_score: 100.0,
+  },
+  {
+    id: 'node-02-mbp-alice',
+    node_id: 'node-02-mbp-alice',
+    name: "Alice's MacBook Pro",
+    hostname: 'mbp-dev-alice',
+    user: 'alice@corp.tailscale',
+    tailnet: tailnet || 'default',
+    addresses: ['100.64.0.88', 'fd7a:115c:a1e0::88'],
+    tags: ['tag:engineering', 'tag:workstation'],
+    os: 'macOS',
+    os_raw: 'macOS 14.5 Sonoma',
+    os_version: '14.5 Sonoma',
+    client_version: '1.60.0',
+    category: 'workstation',
+    is_online: true,
+    last_seen: new Date(Date.now() - 60000).toISOString(),
+    streak_duration_seconds: 86400,
+    streak_duration_human: '1d 0h',
+    is_compliant: true,
+    compliance_status: 'compliant',
+    violations: [],
+    update_available: false,
+    key_expiry_disabled: false,
+    expires_at: new Date(Date.now() + 12 * 86400 * 1000).toISOString(),
+    key_expiry_status: 'warning',
+    days_until_key_expiry: 12.0,
+    is_exit_node: false,
+    exposed_routes: [],
+    derp_region: 'nyc (New York)',
+    latency_ms: 22.4,
+    country: 'US',
+    public_address: '198.51.100.44',
+    country_name: 'United States',
+    is_impossible_travel: false,
+    geo_anomaly_reason: null,
+    tailnet_lock_status: 'signed',
+    is_locked_out: false,
+    is_quarantined: false,
+    is_signing_node: false,
+    magicdns_domain: 'mbp-dev-alice.corp.ts.net',
+    ssl_cert_status: 'valid',
+    ssl_cert_expires_at: new Date(Date.now() + 45 * 86400 * 1000).toISOString(),
+    is_ssl_cert_expiring: false,
+    is_ssl_cert_expired: false,
+    health_status: 'warning',
+    health_score: 88.0,
+  },
+  {
+    id: 'node-03-sec-workstation',
+    node_id: 'node-03-sec-workstation',
+    name: 'SecOps Workstation 01',
+    hostname: 'sec-workstation-01',
+    user: 'security-analyst@corp.tailscale',
+    tailnet: tailnet || 'default',
+    addresses: ['100.64.0.99', 'fd7a:115c:a1e0::99'],
+    tags: ['tag:secops'],
+    os: 'Linux',
+    os_raw: 'Linux 6.9 Fedora 40',
+    os_version: 'Fedora 40',
+    client_version: '1.60.0',
+    category: 'workstation',
+    is_online: true,
+    last_seen: new Date(Date.now() - 30000).toISOString(),
+    streak_duration_seconds: 43200,
+    streak_duration_human: '12h 0m',
+    is_compliant: true,
+    compliance_status: 'compliant',
+    violations: [],
+    update_available: false,
+    key_expiry_disabled: false,
+    expires_at: new Date(Date.now() + 65 * 86400 * 1000).toISOString(),
+    key_expiry_status: 'healthy',
+    days_until_key_expiry: 65.0,
+    is_exit_node: false,
+    exposed_routes: [],
+    derp_region: 'fra (Frankfurt)',
+    latency_ms: 92.5,
+    country: 'DE',
+    public_address: '198.51.100.99',
+    country_name: 'Germany',
+    is_impossible_travel: true,
+    geo_anomaly_reason: 'Impossible travel alert: origin jumped from US to DE (4,200 mi) in 14m (18,000 mph)',
+    tailnet_lock_status: 'signed',
+    is_locked_out: false,
+    is_quarantined: false,
+    is_signing_node: false,
+    magicdns_domain: 'sec-workstation-01.corp.ts.net',
+    ssl_cert_status: 'valid',
+    ssl_cert_expires_at: new Date(Date.now() + 60 * 86400 * 1000).toISOString(),
+    is_ssl_cert_expiring: false,
+    is_ssl_cert_expired: false,
+    health_status: 'critical',
+    health_score: 55.0,
+  },
+  {
+    id: 'node-04-srv-quarantine',
+    node_id: 'node-04-srv-quarantine',
+    name: 'Untrusted Test VM',
+    hostname: 'srv-rogue-lab',
+    user: 'contractor@corp.tailscale',
+    tailnet: tailnet || 'default',
+    addresses: ['100.64.0.210'],
+    tags: ['tag:untrusted'],
+    os: 'Linux',
+    os_raw: 'Linux Debian 12',
+    os_version: 'Debian 12',
+    client_version: '1.56.2',
+    category: 'server',
+    is_online: true,
+    last_seen: new Date(Date.now() - 10000).toISOString(),
+    streak_duration_seconds: 7200,
+    streak_duration_human: '2h 0m',
+    is_compliant: false,
+    compliance_status: 'non_compliant',
+    violations: [
+      'Tailscale client version 1.56.2 is behind target stable 1.60.0',
+      'Device auto-update is disabled (policy requires auto-update)',
+      'Tailscale node state storage is unencrypted',
+    ],
+    update_available: true,
+    key_expiry_disabled: false,
+    expires_at: new Date(Date.now() + 2 * 86400 * 1000).toISOString(),
+    key_expiry_status: 'critical',
+    days_until_key_expiry: 2.1,
+    is_exit_node: false,
+    exposed_routes: ['172.16.0.0/12'],
+    derp_region: 'dfw (Dallas)',
+    latency_ms: 35.1,
+    country: 'US',
+    public_address: '203.0.113.88',
+    country_name: 'United States',
+    is_impossible_travel: false,
+    geo_anomaly_reason: null,
+    tailnet_lock_status: 'locked_out',
+    is_locked_out: true,
+    is_quarantined: true,
+    is_signing_node: false,
+    magicdns_domain: 'srv-rogue-lab.corp.ts.net',
+    ssl_cert_status: 'not_configured',
+    ssl_cert_expires_at: null,
+    is_ssl_cert_expiring: false,
+    is_ssl_cert_expired: false,
+    health_status: 'critical',
+    health_score: 18.0,
+  },
+  {
+    id: 'node-05-win-corp-bob',
+    node_id: 'node-05-win-corp-bob',
+    name: "Bob's Workstation",
+    hostname: 'win-corp-bob',
+    user: 'bob@corp.tailscale',
+    tailnet: tailnet || 'default',
+    addresses: ['100.64.0.112'],
+    tags: ['tag:finance'],
+    os: 'Windows',
+    os_raw: 'Windows 11 Pro 23H2',
+    os_version: '11 Pro (Build 22631)',
+    client_version: '1.58.0',
+    category: 'workstation',
+    is_online: true,
+    last_seen: new Date(Date.now() - 120000).toISOString(),
+    streak_duration_seconds: 28800,
+    streak_duration_human: '8h 0m',
+    is_compliant: false,
+    compliance_status: 'non_compliant',
+    violations: [
+      'Automatic client update is disabled',
+      'Tailscale client version 1.58.0 is behind stable 1.60.0',
+    ],
+    update_available: true,
+    key_expiry_disabled: false,
+    expires_at: new Date(Date.now() + 28 * 86400 * 1000).toISOString(),
+    key_expiry_status: 'healthy',
+    days_until_key_expiry: 28.0,
+    is_exit_node: false,
+    exposed_routes: [],
+    derp_region: 'ord (Chicago)',
+    latency_ms: 28.0,
+    country: 'US',
+    public_address: '198.51.100.66',
+    country_name: 'United States',
+    is_impossible_travel: false,
+    geo_anomaly_reason: null,
+    tailnet_lock_status: 'signed',
+    is_locked_out: false,
+    is_quarantined: false,
+    is_signing_node: false,
+    magicdns_domain: 'win-corp-bob.corp.ts.net',
+    ssl_cert_status: 'valid',
+    ssl_cert_expires_at: new Date(Date.now() + 70 * 86400 * 1000).toISOString(),
+    is_ssl_cert_expiring: false,
+    is_ssl_cert_expired: false,
+    health_status: 'warning',
+    health_score: 64.0,
+  },
+  {
+    id: 'node-06-signing-master',
+    node_id: 'node-06-signing-master',
+    name: 'Tailnet Lock Master Signer',
+    hostname: 'sec-lock-signer-01',
+    user: 'sec-admin@corp.tailscale',
+    tailnet: tailnet || 'default',
+    addresses: ['100.64.0.5'],
+    tags: ['tag:security-root', 'tag:signing-authority'],
+    os: 'Linux',
+    os_raw: 'Linux Alpine 3.20 Hardened',
+    os_version: 'Alpine Linux v3.20',
+    client_version: '1.60.0',
+    category: 'server',
+    is_online: true,
+    last_seen: new Date().toISOString(),
+    streak_duration_seconds: 1209600,
+    streak_duration_human: '14d 0h',
+    is_compliant: true,
+    compliance_status: 'compliant',
+    violations: [],
+    update_available: false,
+    key_expiry_disabled: true,
+    expires_at: null,
+    key_expiry_status: 'healthy',
+    days_until_key_expiry: null,
+    is_exit_node: false,
+    exposed_routes: [],
+    derp_region: 'iad (Ashburn)',
+    latency_ms: 12.0,
+    country: 'US',
+    public_address: '198.51.100.5',
+    country_name: 'United States',
+    is_impossible_travel: false,
+    geo_anomaly_reason: null,
+    tailnet_lock_status: 'signed',
+    is_locked_out: false,
+    is_quarantined: false,
+    is_signing_node: true,
+    magicdns_domain: 'sec-lock-signer-01.corp.ts.net',
+    ssl_cert_status: 'valid',
+    ssl_cert_expires_at: new Date(Date.now() + 120 * 86400 * 1000).toISOString(),
+    is_ssl_cert_expiring: false,
+    is_ssl_cert_expired: false,
+    health_status: 'healthy',
+    health_score: 100.0,
+  },
+  {
+    id: 'node-07-backup-nas',
+    node_id: 'node-07-backup-nas',
+    name: 'Offsite Backup Storage',
+    hostname: 'backup-nas-02',
+    user: 'infra-admin@corp.tailscale',
+    tailnet: tailnet || 'default',
+    addresses: ['100.64.0.180'],
+    tags: ['tag:storage', 'tag:backup'],
+    os: 'Linux',
+    os_raw: 'Linux Synology DSM 7.2',
+    os_version: 'Synology DSM 7.2',
+    client_version: '1.60.0',
+    category: 'server',
+    is_online: false,
+    last_seen: new Date(Date.now() - 172800000).toISOString(),
+    streak_duration_seconds: 172800,
+    streak_duration_human: '2d 0h',
+    is_compliant: true,
+    compliance_status: 'compliant',
+    violations: [],
+    update_available: false,
+    key_expiry_disabled: true,
+    expires_at: null,
+    key_expiry_status: 'healthy',
+    days_until_key_expiry: null,
+    is_exit_node: false,
+    exposed_routes: ['192.168.10.0/24'],
+    derp_region: 'sfo (San Francisco)',
+    latency_ms: 45.0,
+    country: 'US',
+    public_address: '198.51.100.180',
+    country_name: 'United States',
+    is_impossible_travel: false,
+    geo_anomaly_reason: null,
+    tailnet_lock_status: 'signed',
+    is_locked_out: false,
+    is_quarantined: false,
+    is_signing_node: false,
+    magicdns_domain: 'backup-nas-02.corp.ts.net',
+    ssl_cert_status: 'valid',
+    ssl_cert_expires_at: new Date(Date.now() + 50 * 86400 * 1000).toISOString(),
+    is_ssl_cert_expiring: false,
+    is_ssl_cert_expired: false,
+    health_status: 'warning',
+    health_score: 75.0,
+  },
+  {
+    id: 'node-08-iphone-carol',
+    node_id: 'node-08-iphone-carol',
+    name: "Carol's iPhone",
+    hostname: 'iphone-exec-carol',
+    user: 'carol@corp.tailscale',
+    tailnet: tailnet || 'default',
+    addresses: ['100.64.0.220'],
+    tags: ['tag:mobile', 'tag:executive'],
+    os: 'iOS',
+    os_raw: 'iOS 17.5.1',
+    os_version: 'iOS 17.5.1',
+    client_version: '1.60.0',
+    category: 'mobile',
+    is_online: true,
+    last_seen: new Date(Date.now() - 15000).toISOString(),
+    streak_duration_seconds: 3600,
+    streak_duration_human: '1h 0m',
+    is_compliant: true,
+    compliance_status: 'compliant',
+    violations: [],
+    update_available: false,
+    key_expiry_disabled: false,
+    expires_at: new Date(Date.now() + 80 * 86400 * 1000).toISOString(),
+    key_expiry_status: 'healthy',
+    days_until_key_expiry: 80.0,
+    is_exit_node: false,
+    exposed_routes: [],
+    derp_region: 'lhr (London)',
+    latency_ms: 110.0,
+    country: 'GB',
+    public_address: '198.51.100.220',
+    country_name: 'United Kingdom',
+    is_impossible_travel: false,
+    geo_anomaly_reason: null,
+    tailnet_lock_status: 'signed',
+    is_locked_out: false,
+    is_quarantined: false,
+    is_signing_node: false,
+    magicdns_domain: 'iphone-exec-carol.corp.ts.net',
+    ssl_cert_status: 'not_configured',
+    ssl_cert_expires_at: null,
+    is_ssl_cert_expiring: false,
+    is_ssl_cert_expired: false,
+    health_status: 'healthy',
+    health_score: 95.0,
+  },
+];
+
+const nodes = initialMatrix?.matrix || sampleNodes;
+
+// Initial summary metrics
+const totalCount = nodes.length;
+const onlineCount = nodes.filter((n) => n.is_online).length;
+const nonCompliantCount = nodes.filter((n) => !n.is_compliant).length;
+const geoAnomalyCount = nodes.filter((n) => n.is_impossible_travel).length;
+const quarantinedCount = nodes.filter((n) => n.is_quarantined || n.is_locked_out).length;
+---
+
+<div id="fleet-matrix-table-root" class="space-y-4" data-tailnet={tailnet || ''}>
+  <!-- Top Summary KPIs & Filters Bar -->
+  <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-4 sm:p-5 shadow-sm space-y-4">
+    <!-- Header & Metric Badges -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <h2 class="text-xl font-bold text-white tracking-tight">Fleet Matrix Table</h2>
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            Step 19
+          </span>
+        </div>
+        <p class="text-xs text-slate-400 mt-1">
+          Multidimensional matrix monitoring machine OS, device posture compliance, geolocation anomalies, and Tailnet Lock quarantine status across all active endpoints.
+        </p>
+      </div>
+
+      <!-- Quick KPI Badges -->
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <div class="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/80 text-slate-300">
+          <span class="text-slate-500 mr-1">Total:</span>
+          <span id="kpi-total-nodes" class="font-bold text-white">{totalCount}</span>
+        </div>
+        <div class="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+          <span class="text-emerald-500 mr-1">Online:</span>
+          <span id="kpi-online-nodes" class="font-bold text-emerald-400">{onlineCount}</span>
+        </div>
+        <div class="px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300">
+          <span class="text-rose-400 mr-1">Non-Compliant:</span>
+          <span id="kpi-non-compliant" class="font-bold text-rose-400">{nonCompliantCount}</span>
+        </div>
+        <div class="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300">
+          <span class="text-red-400 mr-1">Geo Anomalies:</span>
+          <span id="kpi-geo-anomalies" class="font-bold text-red-400">{geoAnomalyCount}</span>
+        </div>
+        <div class="px-3 py-1.5 rounded-lg bg-red-950/40 border border-red-500/40 text-red-300">
+          <span class="text-red-400 mr-1">Quarantined:</span>
+          <span id="kpi-quarantined" class="font-bold text-red-300">{quarantinedCount}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Filtering & Search Controls -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2 border-t border-slate-800/80">
+      <!-- Search Input -->
+      <div class="relative sm:col-span-2 lg:col-span-2">
+        <input
+          type="text"
+          id="fleet-matrix-search"
+          placeholder="Search hostname, IP, user, or tag..."
+          class="w-full pl-9 pr-3 py-2 text-xs rounded-lg bg-slate-950/70 border border-slate-700 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all font-sans"
+        />
+        <svg
+          class="w-4 h-4 text-slate-500 absolute left-3 top-2.5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          ></path>
+        </svg>
+      </div>
+
+      <!-- OS Family Filter -->
+      <div>
+        <select
+          id="fleet-matrix-filter-os"
+          class="w-full px-3 py-2 text-xs rounded-lg bg-slate-950/70 border border-slate-700 text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+        >
+          <option value="">All Operating Systems</option>
+          <option value="linux">🐧 Linux</option>
+          <option value="macos">🍎 macOS</option>
+          <option value="windows">🪟 Windows</option>
+          <option value="ios">📱 iOS</option>
+          <option value="android">🤖 Android</option>
+        </select>
+      </div>
+
+      <!-- Posture Compliance Filter -->
+      <div>
+        <select
+          id="fleet-matrix-filter-compliance"
+          class="w-full px-3 py-2 text-xs rounded-lg bg-slate-950/70 border border-slate-700 text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+        >
+          <option value="">All Posture Compliance</option>
+          <option value="compliant">✓ Compliant</option>
+          <option value="non_compliant">✕ Non-Compliant (Violations)</option>
+        </select>
+      </div>
+
+      <!-- Tailnet Lock / Quarantine Filter -->
+      <div>
+        <select
+          id="fleet-matrix-filter-lock"
+          class="w-full px-3 py-2 text-xs rounded-lg bg-slate-950/70 border border-slate-700 text-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+        >
+          <option value="">All Lock States</option>
+          <option value="quarantined">⛔ Quarantined / Locked Out</option>
+          <option value="signed">🛡️ Signed</option>
+          <option value="unsigned">⚠️ Unsigned</option>
+          <option value="signing_node">🔑 Signing Nodes</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Secondary Quick Toggles & Refresh -->
+    <div class="flex flex-wrap items-center justify-between gap-3 text-xs pt-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-slate-500 text-[11px] uppercase tracking-wider font-semibold">Quick Filters:</span>
+        <button
+          type="button"
+          id="btn-filter-geo-anomaly"
+          class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center gap-1.5"
+          data-active="false"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+          <span>Geo Anomalies Only</span>
+        </button>
+        <button
+          type="button"
+          id="btn-filter-quarantine"
+          class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center gap-1.5"
+          data-active="false"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+          <span>Quarantined Only</span>
+        </button>
+        <button
+          type="button"
+          id="btn-filter-non-compliant"
+          class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center gap-1.5"
+          data-active="false"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          <span>Non-Compliant Only</span>
+        </button>
+        <button
+          type="button"
+          id="btn-filter-reset"
+          class="px-2 py-1 text-slate-400 hover:text-slate-200 underline text-[11px] transition-colors"
+        >
+          Reset Filters
+        </button>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <span id="filtered-count-label" class="text-slate-400 text-xs">
+          Showing <span id="visible-nodes-count" class="font-bold text-white">{totalCount}</span> of {totalCount} machines
+        </span>
+        <button
+          type="button"
+          id="btn-refresh-matrix"
+          class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+        >
+          <svg id="matrix-refresh-spinner" class="w-3.5 h-3.5 mr-1.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Refresh Matrix
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Multidimensional Matrix Table -->
+  <div class="rounded-xl bg-slate-900/80 border border-slate-800 overflow-hidden shadow-xl">
+    <div class="overflow-x-auto min-h-[350px]">
+      <table class="w-full text-left text-xs text-slate-300 border-collapse">
+        <thead class="bg-slate-950/80 text-slate-400 uppercase tracking-wider border-b border-slate-800 text-[11px] font-semibold sticky top-0 z-10 backdrop-blur-md">
+          <tr>
+            <th scope="col" class="px-4 py-3.5 cursor-pointer hover:text-white transition-colors" data-sort="hostname">
+              <div class="flex items-center gap-1.5">
+                <span>Machine / Identity</span>
+                <span class="sort-icon text-slate-600">↕</span>
+              </div>
+            </th>
+            <th scope="col" class="px-4 py-3.5 cursor-pointer hover:text-white transition-colors" data-sort="os">
+              <div class="flex items-center gap-1.5">
+                <span>Operating System</span>
+                <span class="sort-icon text-slate-600">↕</span>
+              </div>
+            </th>
+            <th scope="col" class="px-4 py-3.5 cursor-pointer hover:text-white transition-colors" data-sort="is_online">
+              <div class="flex items-center gap-1.5">
+                <span>Status & Uptime</span>
+                <span class="sort-icon text-slate-600">↕</span>
+              </div>
+            </th>
+            <th scope="col" class="px-4 py-3.5 cursor-pointer hover:text-white transition-colors" data-sort="is_compliant">
+              <div class="flex items-center gap-1.5">
+                <span>Posture Compliance</span>
+                <span class="sort-icon text-slate-600">↕</span>
+              </div>
+            </th>
+            <th scope="col" class="px-4 py-3.5 cursor-pointer hover:text-white transition-colors" data-sort="country">
+              <div class="flex items-center gap-1.5">
+                <span>Geolocation & Anomalies</span>
+                <span class="sort-icon text-slate-600">↕</span>
+              </div>
+            </th>
+            <th scope="col" class="px-4 py-3.5 cursor-pointer hover:text-white transition-colors" data-sort="tailnet_lock_status">
+              <div class="flex items-center gap-1.5">
+                <span>Tailnet Lock / Quarantine</span>
+                <span class="sort-icon text-slate-600">↕</span>
+              </div>
+            </th>
+            <th scope="col" class="px-4 py-3.5 cursor-pointer hover:text-white transition-colors" data-sort="health_score">
+              <div class="flex items-center gap-1.5">
+                <span>Health Score</span>
+                <span class="sort-icon text-slate-600">↕</span>
+              </div>
+            </th>
+            <th scope="col" class="px-4 py-3.5 text-right">
+              <span>Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="fleet-matrix-tbody" class="divide-y divide-slate-800/60 font-sans">
+          {nodes.map((node) => {
+            const osBadge = getOsBadgeInfo(node.os, node.os_version);
+            const postureBadge = getPostureBadgeInfo(node.is_compliant, node.violations);
+            const geoBadge = getGeoBadgeInfo(node.country, node.is_impossible_travel, node.geo_anomaly_reason, node.country_name);
+            const lockBadge = getTailnetLockBadgeInfo(node.tailnet_lock_status, node.is_locked_out, node.is_quarantined, node.is_signing_node);
+            const healthColor = getHealthScoreColor(node.health_score);
+            const keyBadge = getKeyExpiryBadgeInfo(node.key_expiry_status, node.days_until_key_expiry, node.key_expiry_disabled);
+
+            return (
+              <tr
+                class="hover:bg-slate-800/40 transition-colors node-row"
+                data-id={node.id}
+                data-hostname={node.hostname}
+                data-user={node.user || ''}
+                data-ip={(node.addresses || []).join(' ')}
+                data-os={node.os.toLowerCase()}
+                data-compliant={String(node.is_compliant)}
+                data-geo-anomaly={String(!!node.is_impossible_travel)}
+                data-quarantined={String(node.is_quarantined || node.is_locked_out)}
+                data-lock-status={node.tailnet_lock_status}
+                data-is-signing={String(!!node.is_signing_node)}
+                data-health-score={node.health_score}
+              >
+                <!-- Machine Identity -->
+                <td class="px-4 py-3.5">
+                  <div class="flex flex-col">
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-white font-mono text-xs">{node.hostname}</span>
+                      {node.is_exit_node && (
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                          EXIT NODE
+                        </span>
+                      )}
+                    </div>
+                    <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+                      <span>{node.name || node.hostname}</span>
+                      {node.user && (
+                        <>
+                          <span class="text-slate-600">•</span>
+                          <span class="text-slate-400 truncate max-w-[160px]" title={node.user}>
+                            {node.user}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div class="flex items-center gap-1.5 mt-1 font-mono text-[10px] text-slate-500">
+                      <span>{node.addresses?.[0] || 'No IP'}</span>
+                      {node.derp_region && (
+                        <span class="text-slate-600">[{node.derp_region}]</span>
+                      )}
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Operating System -->
+                <td class="px-4 py-3.5">
+                  <div class="flex flex-col gap-1">
+                    <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-medium w-fit" class:list={[osBadge.colorClass]}>
+                      <span>{osBadge.icon}</span>
+                      <span class="font-semibold">{osBadge.label}</span>
+                    </div>
+                    <span class="text-[11px] text-slate-400 font-mono pl-0.5" title={node.os_raw || ''}>
+                      {node.os_version || node.os_raw || 'Unknown Version'}
+                    </span>
+                    <span class="text-[10px] text-slate-500 font-mono pl-0.5">
+                      TS v{node.client_version || '1.x'}
+                    </span>
+                  </div>
+                </td>
+
+                <!-- Status & Uptime -->
+                <td class="px-4 py-3.5">
+                  <div class="flex flex-col gap-1">
+                    {node.is_online ? (
+                      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 w-fit">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Online
+                      </span>
+                    ) : (
+                      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700 w-fit">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                        Offline
+                      </span>
+                    )}
+                    <span class="text-[11px] text-slate-400">
+                      Streak: <span class="font-mono text-slate-300">{node.streak_duration_human}</span>
+                    </span>
+                    <span class="text-[10px] text-slate-500" title={formatDateTime(node.last_seen)}>
+                      Seen: {formatRelativeTime(node.last_seen)}
+                    </span>
+                  </div>
+                </td>
+
+                <!-- Posture Compliance -->
+                <td class="px-4 py-3.5">
+                  <div class="flex flex-col gap-1.5">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border w-fit" class:list={[postureBadge.badgeClass]}>
+                      <span class="w-1.5 h-1.5 rounded-full" class:list={[postureBadge.dotClass]}></span>
+                      {postureBadge.label}
+                    </span>
+                    {node.violations && node.violations.length > 0 ? (
+                      <div class="space-y-0.5">
+                        <div class="text-[10px] text-rose-400 font-medium flex items-center gap-1">
+                          <span>⚠️ {node.violations.length} Violation{node.violations.length > 1 ? 's' : ''}:</span>
+                        </div>
+                        <ul class="text-[10px] text-slate-400 list-disc list-inside max-w-[220px] truncate" title={node.violations.join('\n')}>
+                          {node.violations.slice(0, 2).map((v) => (
+                            <li class="truncate">{v}</li>
+                          ))}
+                          {node.violations.length > 2 && (
+                            <li class="text-slate-500">+{node.violations.length - 2} more...</li>
+                          )}
+                        </ul>
+                      </div>
+                    ) : (
+                      <span class="text-[10px] text-slate-500">All checks passed</span>
+                    )}
+                  </div>
+                </td>
+
+                <!-- Geolocation & Anomaly -->
+                <td class="px-4 py-3.5">
+                  <div class="flex flex-col gap-1">
+                    <div class="flex items-center gap-1.5">
+                      <span class="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-mono" class:list={[geoBadge.badgeClass]}>
+                        {geoBadge.countryCode} - {geoBadge.countryDisplay}
+                      </span>
+                    </div>
+
+                    {node.is_impossible_travel ? (
+                      <div class="mt-1">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse" title={node.geo_anomaly_reason || ''}>
+                          🚨 IMPOSSIBLE TRAVEL
+                        </span>
+                        <div class="text-[10px] text-red-400/90 font-mono mt-0.5 max-w-[200px] truncate" title={node.geo_anomaly_reason || ''}>
+                          {node.geo_anomaly_reason}
+                        </div>
+                      </div>
+                    ) : (
+                      <span class="text-[10px] text-slate-500 font-mono">
+                        {node.public_address || 'No Public IP'}
+                      </span>
+                    )}
+                  </div>
+                </td>
+
+                <!-- Tailnet Lock / Quarantine -->
+                <td class="px-4 py-3.5">
+                  <div class="flex flex-col gap-1">
+                    {lockBadge.isQuarantined ? (
+                      <div class="space-y-1">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-bold border" class:list={[lockBadge.badgeClass]}>
+                          <span class="w-2 h-2 rounded-full bg-red-400 animate-ping"></span>
+                          ⛔ QUARANTINED
+                        </span>
+                        <div class="text-[10px] text-red-400 font-semibold pl-0.5">
+                          Tailnet Lock lockout active
+                        </div>
+                      </div>
+                    ) : lockBadge.isSigningNode ? (
+                      <div class="space-y-1">
+                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                          🔑 SIGNING NODE
+                        </span>
+                        <div class="text-[10px] text-purple-400/80 font-mono pl-0.5">
+                          Trusted Lock Authority
+                        </div>
+                      </div>
+                    ) : (
+                      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border w-fit" class:list={[lockBadge.badgeClass]}>
+                        <span class="w-1.5 h-1.5 rounded-full" class:list={[lockBadge.dotClass]}></span>
+                        {lockBadge.label}
+                      </span>
+                    )}
+                    <span class="text-[10px] text-slate-500 font-mono pl-0.5">
+                      Key: {keyBadge.label}
+                    </span>
+                  </div>
+                </td>
+
+                <!-- Health Score -->
+                <td class="px-4 py-3.5">
+                  <div class="flex flex-col gap-1 w-24">
+                    <div class="flex items-center justify-between">
+                      <span class="font-bold text-xs font-mono" class:list={[healthColor.textClass]}>
+                        {node.health_score.toFixed(1)}
+                      </span>
+                      <span class="text-[10px] text-slate-500 uppercase">{node.health_status}</span>
+                    </div>
+                    <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        class="h-full rounded-full bg-gradient-to-r"
+                        class:list={[healthColor.barGradient]}
+                        style={`width: ${Math.max(5, Math.min(100, node.health_score))}%`}
+                      ></div>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Actions -->
+                <td class="px-4 py-3.5 text-right">
+                  <button
+                    type="button"
+                    class="btn-inspect-node px-2.5 py-1 text-[11px] font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-slate-600 transition-colors"
+                    data-node-json={JSON.stringify(node)}
+                  >
+                    Inspect
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Empty State -->
+    <div id="fleet-matrix-empty" class="hidden p-12 text-center">
+      <svg class="mx-auto h-10 w-10 text-slate-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <h3 class="text-sm font-semibold text-slate-300">No matching machines found</h3>
+      <p class="text-xs text-slate-500 mt-1">Try adjusting your search query or relaxing your filter constraints.</p>
+      <button
+        type="button"
+        id="btn-empty-reset"
+        class="mt-3 px-3 py-1.5 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+      >
+        Clear all filters
+      </button>
+    </div>
+  </div>
+
+  <!-- Detailed Node Inspection Modal / Slideover -->
+  <div
+    id="node-details-modal"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden"
+  >
+    <div class="relative w-full max-w-2xl max-h-[85vh] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+        <div>
+          <h3 id="modal-hostname" class="text-lg font-bold text-white font-mono">Node Inspection</h3>
+          <p id="modal-subtitle" class="text-xs text-slate-400 mt-0.5">Telemetry attributes and security posture</p>
+        </div>
+        <button
+          type="button"
+          id="btn-close-modal"
+          class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+        >
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Content Body -->
+      <div id="modal-body" class="p-6 overflow-y-auto space-y-6 text-xs text-slate-300">
+        <!-- Filled dynamically by client JS -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3 border-t border-slate-800 bg-slate-950/40 flex justify-end">
+        <button
+          type="button"
+          id="btn-modal-dismiss"
+          class="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { api } from '../services/api';
+  import {
+    getOsBadgeInfo,
+    getPostureBadgeInfo,
+    getGeoBadgeInfo,
+    getTailnetLockBadgeInfo,
+    getKeyExpiryBadgeInfo,
+    getHealthScoreColor,
+    formatDateTime,
+    formatRelativeTime,
+  } from '../utils/formatters';
+  import type { NodeMatrixItem } from '../types';
+
+  interface TableState {
+    query: string;
+    os: string;
+    compliance: string;
+    lock: string;
+    geoAnomalyOnly: boolean;
+    quarantineOnly: boolean;
+    nonCompliantOnly: boolean;
+    sortBy: string;
+    sortAsc: boolean;
+    nodes: NodeMatrixItem[];
+  }
+
+  const state: TableState = {
+    query: '',
+    os: '',
+    compliance: '',
+    lock: '',
+    geoAnomalyOnly: false,
+    quarantineOnly: false,
+    nonCompliantOnly: false,
+    sortBy: 'hostname',
+    sortAsc: true,
+    nodes: [],
+  };
+
+  function initTable() {
+    const root = document.getElementById('fleet-matrix-table-root');
+    if (!root) return;
+
+    const tailnet = root.getAttribute('data-tailnet') || undefined;
+
+    // Collect initial nodes from rendered DOM rows
+    const rowEls = root.querySelectorAll<HTMLTableRowElement>('.node-row');
+    const loadedNodes: NodeMatrixItem[] = [];
+
+    rowEls.forEach((row) => {
+      const inspectBtn = row.querySelector<HTMLButtonElement>('.btn-inspect-node');
+      const rawJson = inspectBtn?.getAttribute('data-node-json');
+      if (rawJson) {
+        try {
+          loadedNodes.push(JSON.parse(rawJson));
+        } catch {
+          // ignore parsing error
+        }
+      }
+    });
+
+    if (loadedNodes.length > 0) {
+      state.nodes = loadedNodes;
+    }
+
+    // Attach search and filter events
+    const searchInput = document.getElementById('fleet-matrix-search') as HTMLInputElement;
+    searchInput?.addEventListener('input', (e) => {
+      state.query = (e.target as HTMLInputElement).value.toLowerCase().trim();
+      applyFiltersAndRender();
+    });
+
+    const osSelect = document.getElementById('fleet-matrix-filter-os') as HTMLSelectElement;
+    osSelect?.addEventListener('change', (e) => {
+      state.os = (e.target as HTMLSelectElement).value.toLowerCase();
+      applyFiltersAndRender();
+    });
+
+    const complianceSelect = document.getElementById('fleet-matrix-filter-compliance') as HTMLSelectElement;
+    complianceSelect?.addEventListener('change', (e) => {
+      state.compliance = (e.target as HTMLSelectElement).value;
+      applyFiltersAndRender();
+    });
+
+    const lockSelect = document.getElementById('fleet-matrix-filter-lock') as HTMLSelectElement;
+    lockSelect?.addEventListener('change', (e) => {
+      state.lock = (e.target as HTMLSelectElement).value;
+      applyFiltersAndRender();
+    });
+
+    // Quick toggle buttons
+    const btnGeoAnomaly = document.getElementById('btn-filter-geo-anomaly');
+    btnGeoAnomaly?.addEventListener('click', () => {
+      state.geoAnomalyOnly = !state.geoAnomalyOnly;
+      updateToggleButton(btnGeoAnomaly, state.geoAnomalyOnly, 'bg-red-500/20 border-red-500/50 text-red-300');
+      applyFiltersAndRender();
+    });
+
+    const btnQuarantine = document.getElementById('btn-filter-quarantine');
+    btnQuarantine?.addEventListener('click', () => {
+      state.quarantineOnly = !state.quarantineOnly;
+      updateToggleButton(btnQuarantine, state.quarantineOnly, 'bg-rose-500/20 border-rose-500/50 text-rose-300');
+      applyFiltersAndRender();
+    });
+
+    const btnNonCompliant = document.getElementById('btn-filter-non-compliant');
+    btnNonCompliant?.addEventListener('click', () => {
+      state.nonCompliantOnly = !state.nonCompliantOnly;
+      updateToggleButton(btnNonCompliant, state.nonCompliantOnly, 'bg-amber-500/20 border-amber-500/50 text-amber-300');
+      applyFiltersAndRender();
+    });
+
+    const resetFilters = () => {
+      state.query = '';
+      state.os = '';
+      state.compliance = '';
+      state.lock = '';
+      state.geoAnomalyOnly = false;
+      state.quarantineOnly = false;
+      state.nonCompliantOnly = false;
+
+      if (searchInput) searchInput.value = '';
+      if (osSelect) osSelect.value = '';
+      if (complianceSelect) complianceSelect.value = '';
+      if (lockSelect) lockSelect.value = '';
+
+      if (btnGeoAnomaly) updateToggleButton(btnGeoAnomaly, false, '');
+      if (btnQuarantine) updateToggleButton(btnQuarantine, false, '');
+      if (btnNonCompliant) updateToggleButton(btnNonCompliant, false, '');
+
+      applyFiltersAndRender();
+    };
+
+    document.getElementById('btn-filter-reset')?.addEventListener('click', resetFilters);
+    document.getElementById('btn-empty-reset')?.addEventListener('click', resetFilters);
+
+    // Refresh button
+    const btnRefresh = document.getElementById('btn-refresh-matrix');
+    btnRefresh?.addEventListener('click', () => {
+      fetchLiveFleetMatrix(tailnet);
+    });
+
+    // Sort column headers
+    const sortHeaders = root.querySelectorAll<HTMLTableCellElement>('th[data-sort]');
+    sortHeaders.forEach((th) => {
+      th.addEventListener('click', () => {
+        const field = th.getAttribute('data-sort');
+        if (!field) return;
+
+        if (state.sortBy === field) {
+          state.sortAsc = !state.sortAsc;
+        } else {
+          state.sortBy = field;
+          state.sortAsc = true;
+        }
+
+        // Update sort indicator icons
+        sortHeaders.forEach((h) => {
+          const icon = h.querySelector('.sort-icon');
+          if (icon) icon.textContent = '↕';
+        });
+        const currentIcon = th.querySelector('.sort-icon');
+        if (currentIcon) {
+          currentIcon.textContent = state.sortAsc ? '↑' : '↓';
+        }
+
+        applyFiltersAndRender();
+      });
+    });
+
+    // Modal dismiss handlers
+    const modal = document.getElementById('node-details-modal');
+    document.getElementById('btn-close-modal')?.addEventListener('click', () => modal?.classList.add('hidden'));
+    document.getElementById('btn-modal-dismiss')?.addEventListener('click', () => modal?.classList.add('hidden'));
+    modal?.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+
+    // Delegate row click for inspection
+    const tbody = document.getElementById('fleet-matrix-tbody');
+    tbody?.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const btn = target.closest<HTMLButtonElement>('.btn-inspect-node');
+      if (btn) {
+        const jsonStr = btn.getAttribute('data-node-json');
+        if (jsonStr) {
+          try {
+            openNodeModal(JSON.parse(jsonStr));
+          } catch {
+            // ignore error
+          }
+        }
+      }
+    });
+
+    // Initial background live fetch if available
+    fetchLiveFleetMatrix(tailnet);
+  }
+
+  function updateToggleButton(btn: HTMLElement, isActive: boolean, activeClasses: string) {
+    btn.setAttribute('data-active', String(isActive));
+    if (isActive) {
+      btn.className = `px-2.5 py-1 rounded-md transition-colors flex items-center gap-1.5 ${activeClasses}`;
+    } else {
+      btn.className = 'px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors flex items-center gap-1.5';
+    }
+  }
+
+  async function fetchLiveFleetMatrix(tailnet?: string) {
+    const spinner = document.getElementById('matrix-refresh-spinner');
+    spinner?.classList.add('animate-spin');
+
+    try {
+      const resp = await api.getFleetMatrix({ tailnet });
+      if (resp && Array.isArray(resp.matrix) && resp.matrix.length > 0) {
+        state.nodes = resp.matrix;
+        updateKpis(resp.matrix);
+        applyFiltersAndRender();
+      }
+    } catch {
+      // Backend not running or offline; SSR fallback remains intact
+    } finally {
+      spinner?.classList.remove('animate-spin');
+    }
+  }
+
+  function updateKpis(nodes: NodeMatrixItem[]) {
+    const total = nodes.length;
+    const online = nodes.filter((n) => n.is_online).length;
+    const nonCompliant = nodes.filter((n) => !n.is_compliant).length;
+    const geoAnomalies = nodes.filter((n) => n.is_impossible_travel).length;
+    const quarantined = nodes.filter((n) => n.is_quarantined || n.is_locked_out).length;
+
+    const elTotal = document.getElementById('kpi-total-nodes');
+    const elOnline = document.getElementById('kpi-online-nodes');
+    const elNonCompliant = document.getElementById('kpi-non-compliant');
+    const elGeo = document.getElementById('kpi-geo-anomalies');
+    const elQuarantine = document.getElementById('kpi-quarantined');
+
+    if (elTotal) elTotal.textContent = String(total);
+    if (elOnline) elOnline.textContent = String(online);
+    if (elNonCompliant) elNonCompliant.textContent = String(nonCompliant);
+    if (elGeo) elGeo.textContent = String(geoAnomalies);
+    if (elQuarantine) elQuarantine.textContent = String(quarantined);
+  }
+
+  function applyFiltersAndRender() {
+    let filtered = [...state.nodes];
+
+    // Search query
+    if (state.query) {
+      filtered = filtered.filter((n) => {
+        const host = (n.hostname || '').toLowerCase();
+        const name = (n.name || '').toLowerCase();
+        const user = (n.user || '').toLowerCase();
+        const ips = (n.addresses || []).join(' ').toLowerCase();
+        const tags = (n.tags || []).join(' ').toLowerCase();
+        return (
+          host.includes(state.query) ||
+          name.includes(state.query) ||
+          user.includes(state.query) ||
+          ips.includes(state.query) ||
+          tags.includes(state.query)
+        );
+      });
+    }
+
+    // OS filter
+    if (state.os) {
+      filtered = filtered.filter((n) => {
+        const osNorm = (n.os || '').toLowerCase();
+        return osNorm.includes(state.os);
+      });
+    }
+
+    // Compliance filter
+    if (state.compliance === 'compliant') {
+      filtered = filtered.filter((n) => n.is_compliant);
+    } else if (state.compliance === 'non_compliant') {
+      filtered = filtered.filter((n) => !n.is_compliant);
+    }
+
+    // Lock filter
+    if (state.lock === 'quarantined') {
+      filtered = filtered.filter((n) => n.is_quarantined || n.is_locked_out);
+    } else if (state.lock === 'signed') {
+      filtered = filtered.filter((n) => n.tailnet_lock_status === 'signed' && !n.is_locked_out);
+    } else if (state.lock === 'unsigned') {
+      filtered = filtered.filter((n) => n.tailnet_lock_status === 'unsigned');
+    } else if (state.lock === 'signing_node') {
+      filtered = filtered.filter((n) => n.is_signing_node);
+    }
+
+    // Quick toggle filters
+    if (state.geoAnomalyOnly) {
+      filtered = filtered.filter((n) => n.is_impossible_travel);
+    }
+    if (state.quarantineOnly) {
+      filtered = filtered.filter((n) => n.is_quarantined || n.is_locked_out);
+    }
+    if (state.nonCompliantOnly) {
+      filtered = filtered.filter((n) => !n.is_compliant);
+    }
+
+    // Sorting
+    filtered.sort((a, b) => {
+      let valA: unknown = a[state.sortBy];
+      let valB: unknown = b[state.sortBy];
+
+      if (typeof valA === 'string') valA = (valA as string).toLowerCase();
+      if (typeof valB === 'string') valB = (valB as string).toLowerCase();
+
+      if (valA === valB) return 0;
+      if (valA === undefined || valA === null) return 1;
+      if (valB === undefined || valB === null) return -1;
+
+      const res = (valA as any) > (valB as any) ? 1 : -1;
+      return state.sortAsc ? res : -res;
+    });
+
+    renderTableRows(filtered);
+  }
+
+  function renderTableRows(nodes: NodeMatrixItem[]) {
+    const tbody = document.getElementById('fleet-matrix-tbody');
+    const empty = document.getElementById('fleet-matrix-empty');
+    const countLabel = document.getElementById('visible-nodes-count');
+
+    if (countLabel) {
+      countLabel.textContent = String(nodes.length);
+    }
+
+    if (!tbody) return;
+
+    if (nodes.length === 0) {
+      tbody.innerHTML = '';
+      empty?.classList.remove('hidden');
+      return;
+    }
+
+    empty?.classList.add('hidden');
+
+    tbody.innerHTML = nodes
+      .map((node) => {
+        const osBadge = getOsBadgeInfo(node.os, node.os_version);
+        const postureBadge = getPostureBadgeInfo(node.is_compliant, node.violations);
+        const geoBadge = getGeoBadgeInfo(
+          node.country,
+          node.is_impossible_travel,
+          node.geo_anomaly_reason,
+          node.country_name
+        );
+        const lockBadge = getTailnetLockBadgeInfo(
+          node.tailnet_lock_status,
+          node.is_locked_out,
+          node.is_quarantined,
+          node.is_signing_node
+        );
+        const healthColor = getHealthScoreColor(node.health_score);
+        const keyBadge = getKeyExpiryBadgeInfo(
+          node.key_expiry_status,
+          node.days_until_key_expiry,
+          node.key_expiry_disabled
+        );
+
+        const safeNodeJson = JSON.stringify(node).replace(/"/g, '&quot;');
+
+        return `
+          <tr
+            class="hover:bg-slate-800/40 transition-colors node-row"
+            data-id="${node.id}"
+          >
+            <!-- Machine Identity -->
+            <td class="px-4 py-3.5">
+              <div class="flex flex-col">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-white font-mono text-xs">${escapeHtml(node.hostname)}</span>
+                  ${
+                    node.is_exit_node
+                      ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">EXIT NODE</span>'
+                      : ''
+                  }
+                </div>
+                <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+                  <span>${escapeHtml(node.name || node.hostname)}</span>
+                  ${
+                    node.user
+                      ? `<span class="text-slate-600">•</span><span class="text-slate-400 truncate max-w-[160px]" title="${escapeHtml(node.user)}">${escapeHtml(node.user)}</span>`
+                      : ''
+                  }
+                </div>
+                <div class="flex items-center gap-1.5 mt-1 font-mono text-[10px] text-slate-500">
+                  <span>${escapeHtml(node.addresses?.[0] || 'No IP')}</span>
+                  ${
+                    node.derp_region
+                      ? `<span class="text-slate-600">[${escapeHtml(node.derp_region)}]</span>`
+                      : ''
+                  }
+                </div>
+              </div>
+            </td>
+
+            <!-- Operating System -->
+            <td class="px-4 py-3.5">
+              <div class="flex flex-col gap-1">
+                <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-medium w-fit ${osBadge.colorClass}">
+                  <span>${osBadge.icon}</span>
+                  <span class="font-semibold">${escapeHtml(osBadge.label)}</span>
+                </div>
+                <span class="text-[11px] text-slate-400 font-mono pl-0.5" title="${escapeHtml(node.os_raw || '')}">
+                  ${escapeHtml(node.os_version || node.os_raw || 'Unknown Version')}
+                </span>
+                <span class="text-[10px] text-slate-500 font-mono pl-0.5">
+                  TS v${escapeHtml(node.client_version || '1.x')}
+                </span>
+              </div>
+            </td>
+
+            <!-- Status & Uptime -->
+            <td class="px-4 py-3.5">
+              <div class="flex flex-col gap-1">
+                ${
+                  node.is_online
+                    ? '<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 w-fit"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>Online</span>'
+                    : '<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700 w-fit"><span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>Offline</span>'
+                }
+                <span class="text-[11px] text-slate-400">
+                  Streak: <span class="font-mono text-slate-300">${escapeHtml(node.streak_duration_human)}</span>
+                </span>
+                <span class="text-[10px] text-slate-500" title="${formatDateTime(node.last_seen)}">
+                  Seen: ${formatRelativeTime(node.last_seen)}
+                </span>
+              </div>
+            </td>
+
+            <!-- Posture Compliance -->
+            <td class="px-4 py-3.5">
+              <div class="flex flex-col gap-1.5">
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border w-fit ${postureBadge.badgeClass}">
+                  <span class="w-1.5 h-1.5 rounded-full ${postureBadge.dotClass}"></span>
+                  ${postureBadge.label}
+                </span>
+                ${
+                  node.violations && node.violations.length > 0
+                    ? `
+                    <div class="space-y-0.5">
+                      <div class="text-[10px] text-rose-400 font-medium flex items-center gap-1">
+                        <span>⚠️ ${node.violations.length} Violation${node.violations.length > 1 ? 's' : ''}:</span>
+                      </div>
+                      <ul class="text-[10px] text-slate-400 list-disc list-inside max-w-[220px] truncate" title="${escapeHtml(node.violations.join('\n'))}">
+                        ${node.violations
+                          .slice(0, 2)
+                          .map((v) => `<li class="truncate">${escapeHtml(v)}</li>`)
+                          .join('')}
+                        ${
+                          node.violations.length > 2
+                            ? `<li class="text-slate-500">+${node.violations.length - 2} more...</li>`
+                            : ''
+                        }
+                      </ul>
+                    </div>`
+                    : '<span class="text-[10px] text-slate-500">All checks passed</span>'
+                }
+              </div>
+            </td>
+
+            <!-- Geolocation & Anomaly -->
+            <td class="px-4 py-3.5">
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-mono ${geoBadge.badgeClass}">
+                    ${escapeHtml(geoBadge.countryCode)} - ${escapeHtml(geoBadge.countryDisplay)}
+                  </span>
+                </div>
+                ${
+                  node.is_impossible_travel
+                    ? `
+                    <div class="mt-1">
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse" title="${escapeHtml(node.geo_anomaly_reason || '')}">
+                        🚨 IMPOSSIBLE TRAVEL
+                      </span>
+                      <div class="text-[10px] text-red-400/90 font-mono mt-0.5 max-w-[200px] truncate" title="${escapeHtml(node.geo_anomaly_reason || '')}">
+                        ${escapeHtml(node.geo_anomaly_reason || '')}
+                      </div>
+                    </div>`
+                    : `<span class="text-[10px] text-slate-500 font-mono">${escapeHtml(node.public_address || 'No Public IP')}</span>`
+                }
+              </div>
+            </td>
+
+            <!-- Tailnet Lock / Quarantine -->
+            <td class="px-4 py-3.5">
+              <div class="flex flex-col gap-1">
+                ${
+                  lockBadge.isQuarantined
+                    ? `
+                    <div class="space-y-1">
+                      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-bold border ${lockBadge.badgeClass}">
+                        <span class="w-2 h-2 rounded-full bg-red-400 animate-ping"></span>
+                        ⛔ QUARANTINED
+                      </span>
+                      <div class="text-[10px] text-red-400 font-semibold pl-0.5">
+                        Tailnet Lock lockout active
+                      </div>
+                    </div>`
+                    : lockBadge.isSigningNode
+                    ? `
+                    <div class="space-y-1">
+                      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                        🔑 SIGNING NODE
+                      </span>
+                      <div class="text-[10px] text-purple-400/80 font-mono pl-0.5">
+                        Trusted Lock Authority
+                      </div>
+                    </div>`
+                    : `
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border w-fit ${lockBadge.badgeClass}">
+                      <span class="w-1.5 h-1.5 rounded-full ${lockBadge.dotClass}"></span>
+                      ${lockBadge.label}
+                    </span>`
+                }
+                <span class="text-[10px] text-slate-500 font-mono pl-0.5">
+                  Key: ${keyBadge.label}
+                </span>
+              </div>
+            </td>
+
+            <!-- Health Score -->
+            <td class="px-4 py-3.5">
+              <div class="flex flex-col gap-1 w-24">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-xs font-mono ${healthColor.textClass}">
+                    ${node.health_score.toFixed(1)}
+                  </span>
+                  <span class="text-[10px] text-slate-500 uppercase">${escapeHtml(node.health_status)}</span>
+                </div>
+                <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    class="h-full rounded-full bg-gradient-to-r ${healthColor.barGradient}"
+                    style="width: ${Math.max(5, Math.min(100, node.health_score))}%"
+                  ></div>
+                </div>
+              </div>
+            </td>
+
+            <!-- Actions -->
+            <td class="px-4 py-3.5 text-right">
+              <button
+                type="button"
+                class="btn-inspect-node px-2.5 py-1 text-[11px] font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-slate-600 transition-colors"
+                data-node-json="${safeNodeJson}"
+              >
+                Inspect
+              </button>
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
+  }
+
+  function openNodeModal(node: NodeMatrixItem) {
+    const modal = document.getElementById('node-details-modal');
+    const hostnameEl = document.getElementById('modal-hostname');
+    const subtitleEl = document.getElementById('modal-subtitle');
+    const bodyEl = document.getElementById('modal-body');
+
+    if (!modal || !hostnameEl || !subtitleEl || !bodyEl) return;
+
+    hostnameEl.textContent = node.hostname;
+    subtitleEl.textContent = `${node.name || node.hostname} • ${node.user || 'Unassigned User'}`;
+
+    const osBadge = getOsBadgeInfo(node.os, node.os_version);
+    const postureBadge = getPostureBadgeInfo(node.is_compliant, node.violations);
+    const geoBadge = getGeoBadgeInfo(
+      node.country,
+      node.is_impossible_travel,
+      node.geo_anomaly_reason,
+      node.country_name
+    );
+    const lockBadge = getTailnetLockBadgeInfo(
+      node.tailnet_lock_status,
+      node.is_locked_out,
+      node.is_quarantined,
+      node.is_signing_node
+    );
+
+    bodyEl.innerHTML = `
+      <!-- Critical Alerts Banner if Quarantined or Geo Anomaly -->
+      ${
+        node.is_quarantined || node.is_locked_out
+          ? `
+          <div class="p-3.5 rounded-xl bg-red-950/40 border border-red-500/50 flex items-start gap-3">
+            <span class="text-xl">⛔</span>
+            <div>
+              <h4 class="font-bold text-red-300">Node Is Quarantined Under Tailnet Lock</h4>
+              <p class="text-[11px] text-red-400 mt-0.5">
+                This device lacks a valid Tailnet Lock signature from an authorized signing node or has been explicitly revoked.
+                Traffic across the tailnet is completely blocked until approved.
+              </p>
+            </div>
+          </div>`
+          : ''
+      }
+      ${
+        node.is_impossible_travel
+          ? `
+          <div class="p-3.5 rounded-xl bg-red-950/40 border border-red-500/50 flex items-start gap-3">
+            <span class="text-xl">🚨</span>
+            <div>
+              <h4 class="font-bold text-red-300">Impossible Travel Anomaly Detected</h4>
+              <p class="text-[11px] text-red-400 mt-0.5">
+                ${escapeHtml(node.geo_anomaly_reason || 'Consecutive device connections originated from geographically incompatible locations within an impossible timeframe.')}
+              </p>
+            </div>
+          </div>`
+          : ''
+      }
+
+      <!-- Grid of Telemetry Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- System & OS -->
+        <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+          <div class="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">System & OS</div>
+          <div class="flex items-center gap-2">
+            <span class="text-base">${osBadge.icon}</span>
+            <span class="font-bold text-white">${escapeHtml(osBadge.label)}</span>
+            <span class="text-slate-400">(${escapeHtml(node.os_version || 'N/A')})</span>
+          </div>
+          <div class="text-slate-400 space-y-1 pt-1 font-mono text-[11px]">
+            <div>Kernel/Raw: <span class="text-slate-300">${escapeHtml(node.os_raw || 'N/A')}</span></div>
+            <div>Tailscale Version: <span class="text-slate-300">${escapeHtml(node.client_version || 'N/A')}</span></div>
+            <div>Device Category: <span class="text-slate-300">${escapeHtml(String(node.category))}</span></div>
+          </div>
+        </div>
+
+        <!-- Posture & Compliance -->
+        <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+          <div class="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Posture Compliance</div>
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border ${postureBadge.badgeClass}">
+              <span class="w-1.5 h-1.5 rounded-full ${postureBadge.dotClass}"></span>
+              ${postureBadge.label}
+            </span>
+          </div>
+          ${
+            node.violations && node.violations.length > 0
+              ? `
+              <div class="pt-1">
+                <div class="text-[11px] text-rose-300 font-semibold">Active Violations:</div>
+                <ul class="mt-1 space-y-1 list-disc list-inside text-rose-400/90 text-[11px]">
+                  ${node.violations.map((v) => `<li>${escapeHtml(v)}</li>`).join('')}
+                </ul>
+              </div>`
+              : '<div class="text-slate-500 text-[11px] pt-1">No compliance violations. All posture rules met.</div>'
+          }
+        </div>
+
+        <!-- Geolocation Telemetry -->
+        <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+          <div class="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Geolocation</div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[11px] font-mono border ${geoBadge.badgeClass}">
+              ${escapeHtml(geoBadge.countryCode)} - ${escapeHtml(geoBadge.countryDisplay)}
+            </span>
+            ${
+              node.is_impossible_travel
+                ? '<span class="text-red-400 font-bold text-[11px]">🚨 Anomaly Alert</span>'
+                : '<span class="text-emerald-400 text-[11px]">✓ Normal Travel</span>'
+            }
+          </div>
+          <div class="text-slate-400 space-y-1 pt-1 font-mono text-[11px]">
+            <div>Public IP: <span class="text-slate-300">${escapeHtml(node.public_address || 'None detected')}</span></div>
+            <div>DERP Fallback: <span class="text-slate-300">${escapeHtml(node.derp_region || 'Direct Mesh')}</span></div>
+            <div>Latency: <span class="text-slate-300">${node.latency_ms !== null && node.latency_ms !== undefined ? `${node.latency_ms} ms` : 'N/A'}</span></div>
+          </div>
+        </div>
+
+        <!-- Tailnet Lock & Key Lifecycle -->
+        <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+          <div class="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Tailnet Lock & Key</div>
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium border ${lockBadge.badgeClass}">
+              ${lockBadge.label}
+            </span>
+            ${node.is_signing_node ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300">Signing Node</span>' : ''}
+          </div>
+          <div class="text-slate-400 space-y-1 pt-1 font-mono text-[11px]">
+            <div>Locked Out: <span class="${node.is_locked_out ? 'text-red-400 font-bold' : 'text-slate-300'}">${node.is_locked_out ? 'YES (Traffic Dropped)' : 'No'}</span></div>
+            <div>Key Expiry: <span class="text-slate-300">${node.key_expiry_disabled ? 'Disabled' : node.days_until_key_expiry ? `${Math.round(node.days_until_key_expiry)} days remaining` : 'N/A'}</span></div>
+            <div>TLS Domain: <span class="text-slate-300">${escapeHtml(node.magicdns_domain || 'N/A')}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Network Addresses & Tags -->
+      <div class="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2 font-mono text-[11px]">
+        <div class="text-slate-400 font-semibold uppercase text-[10px] tracking-wider font-sans">Network Configuration</div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-slate-400 font-sans">Tailscale IPs:</span>
+          ${(node.addresses || []).map((ip) => `<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-200">${escapeHtml(ip)}</span>`).join(' ')}
+        </div>
+        ${
+          node.tags && node.tags.length > 0
+            ? `
+            <div class="flex flex-wrap items-center gap-1.5 pt-1">
+              <span class="text-slate-400 font-sans">Tags:</span>
+              ${node.tags.map((t) => `<span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">${escapeHtml(t)}</span>`).join(' ')}
+            </div>`
+            : ''
+        }
+        ${
+          node.exposed_routes && node.exposed_routes.length > 0
+            ? `
+            <div class="flex flex-wrap items-center gap-1.5 pt-1">
+              <span class="text-slate-400 font-sans">Subnet Routes:</span>
+              ${node.exposed_routes.map((r) => `<span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">${escapeHtml(r)}</span>`).join(' ')}
+            </div>`
+            : ''
+        }
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  }
+
+  function escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // Initialize on DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTable);
+  } else {
+    initTable();
+  }
+</script>

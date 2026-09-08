@@ -1,0 +1,687 @@
+---
+import type { AggregatedHealthStatsResponse } from '../types';
+
+interface Props {
+  initialStats?: AggregatedHealthStatsResponse | null;
+  tailnet?: string;
+}
+
+const { initialStats = null, tailnet } = Astro.props;
+
+// Fallback / default values for initial SSR rendering
+const stats = initialStats || {
+  overall_status: 'healthy',
+  health_score: 98.5,
+  tailnet: tailnet || 'default',
+  fleet: {
+    total_devices: 12,
+    online_devices: 11,
+    offline_devices: 1,
+    fleet_uptime_percentage: 91.7,
+    healthy_devices: 10,
+    warning_devices: 1,
+    critical_devices: 1,
+  },
+  posture: {
+    total_evaluated: 12,
+    compliant_count: 11,
+    non_compliant_count: 1,
+    compliance_percentage: 91.7,
+    auto_update_enabled: 11,
+    auto_update_disabled: 1,
+    state_encrypted: 12,
+    state_unencrypted: 0,
+  },
+  version_drift: {
+    target_stable_version: '1.60.0',
+    up_to_date_count: 11,
+    outdated_count: 1,
+    drift_percentage: 8.3,
+  },
+  key_expiry: {
+    healthy_count: 9,
+    warning_count: 2,
+    critical_count: 1,
+    expired_count: 0,
+    disabled_count: 0,
+  },
+  tailnet_lock: {
+    total_nodes: 12,
+    signed_count: 12,
+    unsigned_count: 0,
+    locked_out_count: 0,
+    quarantined_count: 0,
+    signing_nodes_count: 2,
+  },
+  certificates: {
+    total_tracked: 12,
+    valid_count: 11,
+    expiring_soon_count: 1,
+    expired_count: 0,
+    not_configured_count: 0,
+  },
+  network: {
+    exit_nodes_count: 2,
+    derp_regions_count: 5,
+    avg_latency_ms: 24.5,
+  },
+  geolocation: {
+    total_countries: 3,
+    impossible_travel_alerts: 0,
+  },
+  audit_alerts: {
+    total_events: 154,
+    events_last_24h: 38,
+    critical_count: 0,
+    error_count: 1,
+    warning_count: 4,
+    info_count: 33,
+  },
+  services: {
+    scheduler_running: true,
+  },
+  active_alerts: [
+    {
+      severity: 'warning',
+      category: 'key_expiry',
+      source: 'version_monitor',
+      message: 'Node mbp-dev-alice key expires in 12 days',
+      hostname: 'mbp-dev-alice',
+      details: { days_remaining: 12 },
+    },
+    {
+      severity: 'warning',
+      category: 'fleet',
+      source: 'poller',
+      message: 'Node backup-nas-02 is currently offline',
+      hostname: 'backup-nas-02',
+      details: { is_online: false },
+    },
+  ],
+  timestamp: new Date().toISOString(),
+};
+
+const hasExpiringKeys = (stats.key_expiry.warning_count + stats.key_expiry.critical_count + stats.key_expiry.expired_count) > 0;
+const hasOfflineNodes = stats.fleet.offline_devices > 0;
+---
+
+<div id="health-bar-container" class="space-y-4" data-tailnet={tailnet || ''}>
+  <!-- Top Level Status Banner & Quick Metrics -->
+  <div class="rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800 shadow-xl overflow-hidden">
+    <!-- Header strip with status indicator, score meter, and actions -->
+    <div class="px-5 py-4 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-4 bg-slate-950/40">
+      <div class="flex items-center space-x-3">
+        <!-- Status Indicator Badge -->
+        <div id="health-status-badge" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border transition-colors bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+          <span id="health-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="health-status-text">{stats.overall_status.toUpperCase()}</span>
+        </div>
+
+        <div class="h-4 w-px bg-slate-800"></div>
+
+        <div class="flex items-baseline space-x-1.5">
+          <span class="text-xs text-slate-400 font-medium">Score:</span>
+          <span id="health-score-val" class="text-lg font-bold text-white font-mono">
+            {stats.health_score.toFixed(1)}
+          </span>
+          <span class="text-xs text-slate-500">/ 100</span>
+        </div>
+
+        {stats.tailnet && (
+          <span id="health-tailnet-tag" class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800/80 text-slate-300 border border-slate-700/60">
+            tailnet: {stats.tailnet}
+          </span>
+        )}
+      </div>
+
+      <!-- Quick Action Buttons & Last Updated -->
+      <div class="flex items-center space-x-3 text-xs">
+        <span id="health-last-updated" class="text-slate-500 font-mono text-[11px] hidden md:inline">
+          Updated: just now
+        </span>
+
+        <button
+          id="btn-refresh-health"
+          title="Refresh aggregated fleet health"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 transition-all text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        >
+          <svg id="health-refresh-icon" class="w-3.5 h-3.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Health Score Progress Bar -->
+    <div class="w-full bg-slate-950 h-1.5 overflow-hidden">
+      <div
+        id="health-score-bar"
+        class="h-full transition-all duration-500 bg-gradient-to-r from-emerald-500 to-teal-400"
+        style={`width: ${Math.min(100, Math.max(0, stats.health_score))}%`}
+      ></div>
+    </div>
+
+    <!-- Key Status Tiles Grid -->
+    <div class="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- TILE 1: OFFLINE NODES VISUAL DISPLAY -->
+      <div
+        id="card-offline-nodes"
+        class={`relative rounded-xl p-4 border transition-all ${
+          hasOfflineNodes
+            ? 'bg-amber-950/20 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
+            : 'bg-slate-900/60 border-slate-800'
+        }`}
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Node Availability</span>
+          <span
+            id="badge-offline-status"
+            class={`px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1.5 ${
+              hasOfflineNodes
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            }`}
+          >
+            <span class={`w-1.5 h-1.5 rounded-full ${hasOfflineNodes ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
+            <span id="text-offline-status">{hasOfflineNodes ? `${stats.fleet.offline_devices} Offline` : 'All Online'}</span>
+          </span>
+        </div>
+
+        <div class="mt-3 flex items-baseline gap-2">
+          <span id="count-offline-nodes" class={`text-3xl font-extrabold font-mono ${hasOfflineNodes ? 'text-amber-400' : 'text-white'}`}>
+            {stats.fleet.offline_devices}
+          </span>
+          <span class="text-xs text-slate-400">
+            offline / <span id="count-total-nodes" class="font-medium text-slate-300">{stats.fleet.total_devices}</span> total
+          </span>
+        </div>
+
+        <div class="mt-2 text-xs text-slate-400 flex items-center justify-between">
+          <span>Fleet Uptime:</span>
+          <span id="pct-fleet-uptime" class="font-semibold text-slate-200 font-mono">
+            {stats.fleet.fleet_uptime_percentage}%
+          </span>
+        </div>
+      </div>
+
+      <!-- TILE 2: EXPIRING KEYS VISUAL DISPLAY -->
+      <div
+        id="card-expiring-keys"
+        class={`relative rounded-xl p-4 border transition-all ${
+          stats.key_expiry.expired_count > 0
+            ? 'bg-red-950/25 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]'
+            : stats.key_expiry.critical_count > 0
+            ? 'bg-rose-950/20 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.1)]'
+            : stats.key_expiry.warning_count > 0
+            ? 'bg-amber-950/20 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
+            : 'bg-slate-900/60 border-slate-800'
+        }`}
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Auth Key Expiry</span>
+          <span
+            id="badge-key-expiry-status"
+            class={`px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1.5 ${
+              stats.key_expiry.expired_count > 0
+                ? 'bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse'
+                : stats.key_expiry.critical_count > 0
+                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                : stats.key_expiry.warning_count > 0
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            }`}
+          >
+            <span class={`w-1.5 h-1.5 rounded-full ${hasExpiringKeys ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
+            <span id="text-key-expiry-status">
+              {stats.key_expiry.expired_count > 0
+                ? `${stats.key_expiry.expired_count} Expired`
+                : stats.key_expiry.critical_count > 0
+                ? `${stats.key_expiry.critical_count} Critical (<7d)`
+                : stats.key_expiry.warning_count > 0
+                ? `${stats.key_expiry.warning_count} Warning (<14d)`
+                : 'All Keys Valid'}
+            </span>
+          </span>
+        </div>
+
+        <div class="mt-3 flex items-baseline gap-2">
+          <span
+            id="count-expiring-keys"
+            class={`text-3xl font-extrabold font-mono ${
+              stats.key_expiry.expired_count > 0
+                ? 'text-red-400'
+                : (stats.key_expiry.critical_count + stats.key_expiry.warning_count) > 0
+                ? 'text-amber-400'
+                : 'text-white'
+            }`}
+          >
+            {stats.key_expiry.expired_count + stats.key_expiry.critical_count + stats.key_expiry.warning_count}
+          </span>
+          <span class="text-xs text-slate-400">
+            keys requiring rotation
+          </span>
+        </div>
+
+        <!-- Key distribution pills -->
+        <div class="mt-2 flex items-center gap-2 text-[11px] font-mono">
+          <span id="pill-healthy-keys" class="text-emerald-400" title="Valid keys">
+            ✓ {stats.key_expiry.healthy_count} valid
+          </span>
+          <span class="text-slate-600">&bull;</span>
+          <span id="pill-warning-keys" class="text-amber-400" title="Expiring within warning window">
+            ⏳ {stats.key_expiry.warning_count + stats.key_expiry.critical_count} soon
+          </span>
+          {stats.key_expiry.expired_count > 0 && (
+            <>
+              <span class="text-slate-600">&bull;</span>
+              <span id="pill-expired-keys" class="text-red-400 font-bold" title="Expired keys">
+                🚨 {stats.key_expiry.expired_count} exp
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      <!-- TILE 3: ZERO TRUST POSTURE COMPLIANCE -->
+      <div id="card-posture-compliance" class="rounded-xl p-4 bg-slate-900/60 border border-slate-800 transition-all">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Posture Compliance</span>
+          <span
+            id="badge-posture-status"
+            class={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+              stats.posture.non_compliant_count > 0
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            }`}
+          >
+            <span id="text-posture-status">
+              {stats.posture.non_compliant_count > 0 ? `${stats.posture.non_compliant_count} Non-Compliant` : '100% Compliant'}
+            </span>
+          </span>
+        </div>
+
+        <div class="mt-3 flex items-baseline gap-2">
+          <span id="pct-posture-compliance" class="text-3xl font-extrabold font-mono text-white">
+            {stats.posture.compliance_percentage}%
+          </span>
+          <span class="text-xs text-slate-400">compliant devices</span>
+        </div>
+
+        <div class="mt-2 text-xs text-slate-400 flex items-center justify-between">
+          <span>Auto-updates:</span>
+          <span id="stat-auto-update" class="font-mono text-slate-300">
+            {stats.posture.auto_update_enabled}/{stats.posture.total_evaluated} enabled
+          </span>
+        </div>
+      </div>
+
+      <!-- TILE 4: TAILNET LOCK & TLS CERTS -->
+      <div id="card-security-guardrails" class="rounded-xl p-4 bg-slate-900/60 border border-slate-800 transition-all">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Security Guardrails</span>
+          <span
+            id="badge-guardrails-status"
+            class={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+              (stats.tailnet_lock.locked_out_count + stats.tailnet_lock.unsigned_count + stats.certificates.expiring_soon_count) > 0
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+            }`}
+          >
+            <span id="text-guardrails-status">
+              {stats.tailnet_lock.locked_out_count > 0
+                ? `${stats.tailnet_lock.locked_out_count} Locked Out`
+                : stats.tailnet_lock.unsigned_count > 0
+                ? `${stats.tailnet_lock.unsigned_count} Unsigned`
+                : 'Lock & Certs OK'}
+            </span>
+          </span>
+        </div>
+
+        <div class="mt-3 flex items-baseline gap-2">
+          <span id="count-signed-nodes" class="text-3xl font-extrabold font-mono text-white">
+            {stats.tailnet_lock.signed_count}
+          </span>
+          <span class="text-xs text-slate-400">
+            / <span id="count-lock-total">{stats.tailnet_lock.total_nodes}</span> nodes signed
+          </span>
+        </div>
+
+        <div class="mt-2 text-xs text-slate-400 flex items-center justify-between">
+          <span>MagicDNS TLS:</span>
+          <span id="stat-cert-health" class="font-mono text-slate-300">
+            {stats.certificates.valid_count} valid
+            {stats.certificates.expiring_soon_count > 0 ? ` (${stats.certificates.expiring_soon_count} exp soon)` : ''}
+          </span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Active Alerts Ticker (Expandable Banner) -->
+    <div
+      id="health-alerts-banner"
+      class={`px-5 py-3 border-t border-slate-800/80 bg-slate-950/60 ${
+        stats.active_alerts.length > 0 ? 'block' : 'hidden'
+      }`}
+    >
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2.5">
+          <span class="flex h-2 w-2 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+          </span>
+          <span class="text-xs font-semibold text-amber-300 uppercase tracking-wider">
+            Active Fleet Attention Required (<span id="count-active-alerts">{stats.active_alerts.length}</span>)
+          </span>
+        </div>
+
+        <button
+          id="toggle-alerts-list"
+          class="text-xs text-slate-400 hover:text-white transition-colors underline font-medium"
+        >
+          Toggle Details
+        </button>
+      </div>
+
+      <!-- Alerts List Items -->
+      <div id="health-alerts-list" class="mt-3 space-y-2 text-xs font-mono">
+        {stats.active_alerts.map((alert) => (
+          <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2 overflow-hidden">
+              <span class={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold shrink-0 ${
+                alert.severity === 'critical'
+                  ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+              }`}>
+                {alert.severity}
+              </span>
+              <span class="text-slate-400 text-[11px] shrink-0">[{alert.category}]</span>
+              <span class="text-slate-200 truncate">{alert.message}</span>
+            </div>
+            {alert.hostname && (
+              <span class="text-slate-500 text-[11px] shrink-0 font-sans px-2 py-0.5 rounded bg-slate-800">
+                {alert.hostname}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { api } from '../services/api';
+  import type { AggregatedHealthStatsResponse } from '../types';
+
+  function updateHealthBarUI(data: AggregatedHealthStatsResponse) {
+    // 1. Overall Status
+    const statusBadge = document.getElementById('health-status-badge');
+    const statusDot = document.getElementById('health-status-dot');
+    const statusText = document.getElementById('health-status-text');
+    const scoreVal = document.getElementById('health-score-val');
+    const scoreBar = document.getElementById('health-score-bar');
+    const lastUpdated = document.getElementById('health-last-updated');
+
+    const status = data.overall_status || 'healthy';
+    if (statusBadge && statusDot && statusText) {
+      statusText.textContent = status.toUpperCase();
+      if (status === 'critical') {
+        statusBadge.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border transition-colors bg-red-500/20 text-red-300 border-red-500/40';
+        statusDot.className = 'w-2 h-2 rounded-full bg-red-400 animate-pulse';
+      } else if (status === 'warning') {
+        statusBadge.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border transition-colors bg-amber-500/20 text-amber-300 border-amber-500/40';
+        statusDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+      } else {
+        statusBadge.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border transition-colors bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+        statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+      }
+    }
+
+    if (scoreVal) {
+      scoreVal.textContent = data.health_score.toFixed(1);
+    }
+    if (scoreBar) {
+      scoreBar.style.width = `${Math.min(100, Math.max(0, data.health_score))}%`;
+      if (data.health_score < 70) {
+        scoreBar.className = 'h-full transition-all duration-500 bg-gradient-to-r from-red-600 to-rose-500';
+      } else if (data.health_score < 85) {
+        scoreBar.className = 'h-full transition-all duration-500 bg-gradient-to-r from-amber-500 to-yellow-400';
+      } else {
+        scoreBar.className = 'h-full transition-all duration-500 bg-gradient-to-r from-emerald-500 to-teal-400';
+      }
+    }
+    if (lastUpdated) {
+      const now = new Date();
+      lastUpdated.textContent = `Updated: ${now.toLocaleTimeString()}`;
+    }
+
+    // 2. Offline Nodes Visual Display
+    const cardOffline = document.getElementById('card-offline-nodes');
+    const badgeOffline = document.getElementById('badge-offline-status');
+    const textOffline = document.getElementById('text-offline-status');
+    const countOffline = document.getElementById('count-offline-nodes');
+    const countTotal = document.getElementById('count-total-nodes');
+    const pctUptime = document.getElementById('pct-fleet-uptime');
+
+    const offlineCount = data.fleet?.offline_devices ?? 0;
+    const totalCount = data.fleet?.total_devices ?? 0;
+    const uptimePct = data.fleet?.fleet_uptime_percentage ?? 100.0;
+
+    if (countOffline) countOffline.textContent = String(offlineCount);
+    if (countTotal) countTotal.textContent = String(totalCount);
+    if (pctUptime) pctUptime.textContent = `${uptimePct}%`;
+
+    if (offlineCount > 0) {
+      if (cardOffline) {
+        cardOffline.className = 'relative rounded-xl p-4 border transition-all bg-amber-950/20 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
+      }
+      if (badgeOffline) {
+        badgeOffline.className = 'px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse';
+      }
+      if (textOffline) {
+        textOffline.textContent = `${offlineCount} Offline`;
+      }
+      if (countOffline) {
+        countOffline.className = 'text-3xl font-extrabold font-mono text-amber-400';
+      }
+    } else {
+      if (cardOffline) {
+        cardOffline.className = 'relative rounded-xl p-4 border transition-all bg-slate-900/60 border-slate-800';
+      }
+      if (badgeOffline) {
+        badgeOffline.className = 'px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+      }
+      if (textOffline) {
+        textOffline.textContent = 'All Online';
+      }
+      if (countOffline) {
+        countOffline.className = 'text-3xl font-extrabold font-mono text-white';
+      }
+    }
+
+    // 3. Expiring Keys Visual Display
+    const cardKeys = document.getElementById('card-expiring-keys');
+    const badgeKeys = document.getElementById('badge-key-expiry-status');
+    const textKeys = document.getElementById('text-key-expiry-status');
+    const countExpiring = document.getElementById('count-expiring-keys');
+    const pillHealthy = document.getElementById('pill-healthy-keys');
+    const pillWarning = document.getElementById('pill-warning-keys');
+
+    const healthyKeys = data.key_expiry?.healthy_count ?? 0;
+    const warningKeys = data.key_expiry?.warning_count ?? 0;
+    const criticalKeys = data.key_expiry?.critical_count ?? 0;
+    const expiredKeys = data.key_expiry?.expired_count ?? 0;
+    const totalExpiringSoon = warningKeys + criticalKeys;
+    const totalRequiringAction = totalExpiringSoon + expiredKeys;
+
+    if (countExpiring) countExpiring.textContent = String(totalRequiringAction);
+    if (pillHealthy) pillHealthy.textContent = `✓ ${healthyKeys} valid`;
+    if (pillWarning) pillWarning.textContent = `⏳ ${totalExpiringSoon} soon`;
+
+    if (expiredKeys > 0) {
+      if (cardKeys) cardKeys.className = 'relative rounded-xl p-4 border transition-all bg-red-950/25 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]';
+      if (badgeKeys) badgeKeys.className = 'px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1.5 bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse';
+      if (textKeys) textKeys.textContent = `${expiredKeys} Expired`;
+      if (countExpiring) countExpiring.className = 'text-3xl font-extrabold font-mono text-red-400';
+    } else if (criticalKeys > 0) {
+      if (cardKeys) cardKeys.className = 'relative rounded-xl p-4 border transition-all bg-rose-950/20 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.1)]';
+      if (badgeKeys) badgeKeys.className = 'px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1.5 bg-rose-500/20 text-rose-300 border border-rose-500/40';
+      if (textKeys) textKeys.textContent = `${criticalKeys} Critical (<7d)`;
+      if (countExpiring) countExpiring.className = 'text-3xl font-extrabold font-mono text-rose-400';
+    } else if (warningKeys > 0) {
+      if (cardKeys) cardKeys.className = 'relative rounded-xl p-4 border transition-all bg-amber-950/20 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
+      if (badgeKeys) badgeKeys.className = 'px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1.5 bg-amber-500/20 text-amber-300 border border-amber-500/40';
+      if (textKeys) textKeys.textContent = `${warningKeys} Warning (<14d)`;
+      if (countExpiring) countExpiring.className = 'text-3xl font-extrabold font-mono text-amber-400';
+    } else {
+      if (cardKeys) cardKeys.className = 'relative rounded-xl p-4 border transition-all bg-slate-900/60 border-slate-800';
+      if (badgeKeys) badgeKeys.className = 'px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+      if (textKeys) textKeys.textContent = 'All Keys Valid';
+      if (countExpiring) countExpiring.className = 'text-3xl font-extrabold font-mono text-white';
+    }
+
+    // 4. Posture Compliance
+    const pctCompliance = document.getElementById('pct-posture-compliance');
+    const badgePosture = document.getElementById('badge-posture-status');
+    const textPosture = document.getElementById('text-posture-status');
+    const statAutoUpdate = document.getElementById('stat-auto-update');
+
+    const nonCompliant = data.posture?.non_compliant_count ?? 0;
+    const compPct = data.posture?.compliance_percentage ?? 100.0;
+    if (pctCompliance) pctCompliance.textContent = `${compPct}%`;
+    if (badgePosture && textPosture) {
+      if (nonCompliant > 0) {
+        badgePosture.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40';
+        textPosture.textContent = `${nonCompliant} Non-Compliant`;
+      } else {
+        badgePosture.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+        textPosture.textContent = '100% Compliant';
+      }
+    }
+    if (statAutoUpdate) {
+      statAutoUpdate.textContent = `${data.posture?.auto_update_enabled ?? 0}/${data.posture?.total_evaluated ?? 0} enabled`;
+    }
+
+    // 5. Tailnet Lock & TLS
+    const countSigned = document.getElementById('count-signed-nodes');
+    const countLockTotal = document.getElementById('count-lock-total');
+    const badgeGuardrails = document.getElementById('badge-guardrails-status');
+    const textGuardrails = document.getElementById('text-guardrails-status');
+    const statCertHealth = document.getElementById('stat-cert-health');
+
+    const lockedOut = data.tailnet_lock?.locked_out_count ?? 0;
+    const unsigned = data.tailnet_lock?.unsigned_count ?? 0;
+    const expSoon = data.certificates?.expiring_soon_count ?? 0;
+
+    if (textGuardrails && badgeGuardrails) {
+      if (lockedOut > 0) {
+        badgeGuardrails.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse';
+        textGuardrails.textContent = `${lockedOut} Locked Out`;
+      } else if (unsigned > 0) {
+        badgeGuardrails.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40';
+        textGuardrails.textContent = `${unsigned} Unsigned`;
+      } else if (expSoon > 0) {
+        badgeGuardrails.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        textGuardrails.textContent = `${expSoon} Certs Exp Soon`;
+      } else {
+        badgeGuardrails.className = 'px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+        textGuardrails.textContent = 'Lock & Certs OK';
+      }
+    }
+
+    if (countSigned) countSigned.textContent = String(data.tailnet_lock?.signed_count ?? 0);
+    if (countLockTotal) countLockTotal.textContent = String(data.tailnet_lock?.total_nodes ?? 0);
+    if (statCertHealth) {
+      statCertHealth.textContent = `${data.certificates?.valid_count ?? 0} valid${expSoon > 0 ? ` (${expSoon} exp soon)` : ''}`;
+    }
+
+    // 6. Active Alerts Banner
+    const alertsBanner = document.getElementById('health-alerts-banner');
+    const alertsCount = document.getElementById('count-active-alerts');
+    const alertsList = document.getElementById('health-alerts-list');
+
+    const alerts = data.active_alerts || [];
+    if (alertsCount) alertsCount.textContent = String(alerts.length);
+
+    if (alertsBanner) {
+      if (alerts.length > 0) {
+        alertsBanner.classList.remove('hidden');
+        alertsBanner.classList.add('block');
+      } else {
+        alertsBanner.classList.remove('block');
+        alertsBanner.classList.add('hidden');
+      }
+    }
+
+    if (alertsList && alerts.length > 0) {
+      alertsList.innerHTML = alerts
+        .map(
+          (a) => `
+          <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2 overflow-hidden">
+              <span class="px-1.5 py-0.5 rounded text-[10px] uppercase font-bold shrink-0 ${
+                a.severity === 'critical'
+                  ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+              }">
+                ${a.severity}
+              </span>
+              <span class="text-slate-400 text-[11px] shrink-0">[${a.category}]</span>
+              <span class="text-slate-200 truncate">${a.message}</span>
+            </div>
+            ${
+              a.hostname
+                ? `<span class="text-slate-500 text-[11px] shrink-0 font-sans px-2 py-0.5 rounded bg-slate-800">${a.hostname}</span>`
+                : ''
+            }
+          </div>
+        `
+        )
+        .join('');
+    }
+  }
+
+  async function fetchHealthStats() {
+    const container = document.getElementById('health-bar-container');
+    const tailnet = container?.getAttribute('data-tailnet') || undefined;
+    const refreshIcon = document.getElementById('health-refresh-icon');
+
+    if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+    try {
+      const data = await api.getAggregatedHealthStats(tailnet);
+      updateHealthBarUI(data);
+    } catch (err) {
+      console.warn('Backend /api/v1/fleet/health not reachable or returned error:', err);
+    } finally {
+      if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+    }
+  }
+
+  // Setup Event Listeners & Periodic Poll
+  document.addEventListener('DOMContentLoaded', () => {
+    // Initial fetch from live API
+    fetchHealthStats();
+
+    // Refresh button
+    const refreshBtn = document.getElementById('btn-refresh-health');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => fetchHealthStats());
+    }
+
+    // Toggle alerts list
+    const toggleBtn = document.getElementById('toggle-alerts-list');
+    const alertsList = document.getElementById('health-alerts-list');
+    if (toggleBtn && alertsList) {
+      toggleBtn.addEventListener('click', () => {
+        alertsList.classList.toggle('hidden');
+      });
+    }
+
+    // Poll every 15 seconds
+    setInterval(fetchHealthStats, 15000);
+  });
+</script>

@@ -1,0 +1,789 @@
+---
+import type { AuditFeedResponse, AuditLogEventItem } from '../types';
+import { formatRelativeTime, formatDateTime, isWebhookEvent, getSeverityStyle, getCategoryStyle } from '../utils/formatters';
+
+interface Props {
+  initialFeed?: AuditFeedResponse | null;
+  tailnet?: string;
+  limit?: number;
+}
+
+const { initialFeed = null, tailnet, limit = 50 } = Astro.props;
+
+// Default sample events for instant SSR rendering
+const sampleEvents: AuditLogEventItem[] = [
+  {
+    id: 'evt-sample-01',
+    node_id: null,
+    hostname: null,
+    device_name: null,
+    os: null,
+    tailnet: tailnet || 'default',
+    event_type: 'policy.update',
+    event_category: 'acl',
+    severity: 'info',
+    action: 'tailscale_webhook_received',
+    actor: 'webhook',
+    message: 'Tailscale ACL policy updated and signature verified via webhook',
+    details: {
+      webhook: true,
+      signature_verified: true,
+      source: 'Tailscale-Webhook-Signature (HMAC-SHA256)',
+      actor: 'admin@company.com',
+      changes: ['Added Tag:tag:prod-servers', 'Permitted port 443 egress'],
+    },
+    ip_address: '198.51.100.42',
+    created_at: new Date(Date.now() - 30 * 1000).toISOString(),
+  },
+  {
+    id: 'evt-sample-02',
+    node_id: 'node-edge-02',
+    hostname: 'srv-edge-02',
+    device_name: 'Edge Gateway 02',
+    os: 'Linux (Ubuntu 24.04)',
+    tailnet: tailnet || 'default',
+    event_type: 'node.offline',
+    event_category: 'device',
+    severity: 'warning',
+    action: 'node_state_transition',
+    actor: 'poller',
+    message: 'Node srv-edge-02 failed heartbeats and transitioned to offline state',
+    details: {
+      last_seen: new Date(Date.now() - 120 * 1000).toISOString(),
+      offline_duration_seconds: 120,
+      tailscale_ips: ['100.64.0.15'],
+    },
+    ip_address: '100.64.0.15',
+    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'evt-sample-03',
+    node_id: 'node-mbp-alice',
+    hostname: 'mbp-dev-alice',
+    device_name: "Alice's MacBook Pro",
+    os: 'macOS (14.5 Sonoma)',
+    tailnet: tailnet || 'default',
+    event_type: 'security.key_expiry_warning',
+    event_category: 'security',
+    severity: 'warning',
+    action: 'key_expiry_check',
+    actor: 'version_monitor',
+    message: 'Node mbp-dev-alice key expires in 12 days (exceeds warning threshold)',
+    details: {
+      expires_at: new Date(Date.now() + 12 * 86400 * 1000).toISOString(),
+      days_remaining: 12,
+      key_status: 'warning',
+    },
+    ip_address: '100.64.0.88',
+    created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'evt-sample-04',
+    node_id: 'node-sec-01',
+    hostname: 'sec-workstation-01',
+    device_name: 'Security Admin Laptop',
+    os: 'Linux (Fedora 40)',
+    tailnet: tailnet || 'default',
+    event_type: 'security.impossible_travel',
+    event_category: 'security',
+    severity: 'critical',
+    action: 'geolocation_anomaly_detected',
+    actor: 'geolocation_monitor',
+    message: 'Impossible travel alert: origin jumped from US to DE (4,200 mi) in 14m',
+    details: {
+      previous_country: 'US',
+      current_country: 'DE',
+      speed_mph: 18000,
+      time_delta_seconds: 840,
+    },
+    ip_address: '198.51.100.99',
+    created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'evt-sample-05',
+    node_id: null,
+    hostname: null,
+    device_name: null,
+    os: null,
+    tailnet: tailnet || 'default',
+    event_type: 'sync.completed',
+    event_category: 'system',
+    severity: 'info',
+    action: 'tailscale_fleet_sync',
+    actor: 'poller',
+    message: 'Periodic fleet synchronization complete: 12 devices evaluated, 0 anomalies',
+    details: {
+      devices_polled: 12,
+      changes_detected: 0,
+    },
+    ip_address: null,
+    created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const feed = initialFeed || {
+  total: sampleEvents.length,
+  count: sampleEvents.length,
+  limit,
+  offset: 0,
+  has_more: false,
+  order: 'desc',
+  summary: {
+    total_matching: sampleEvents.length,
+    by_severity: { info: 2, warning: 2, critical: 1 },
+    by_category: { acl: 1, device: 1, security: 2, system: 1 },
+  },
+  events: sampleEvents,
+  timestamp: new Date().toISOString(),
+};
+---
+
+<div
+  id="audit-feed-component"
+  class="rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800 shadow-xl overflow-hidden"
+  data-tailnet={tailnet || ''}
+  data-limit={limit}
+>
+  <!-- Top Header Toolbar: Title, Live Status Indicator, Action Buttons -->
+  <div class="px-5 py-4 border-b border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-950/50">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-sm">
+        📜
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h3 class="font-bold text-white text-base tracking-tight">Audit Log & Webhook Feed</h3>
+          <span
+            id="audit-feed-live-indicator"
+            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span id="audit-feed-live-text">Live Polling (8s)</span>
+          </span>
+        </div>
+        <p class="text-xs text-slate-400 mt-0.5">
+          Real-time security events, offline node transitions, expiring keys, and verified Tailscale webhooks.
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Stats Pills & Controls -->
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 font-mono text-[11px]">
+        <span>Total:</span>
+        <strong id="audit-feed-stat-total" class="text-white">{feed.total}</strong>
+      </div>
+
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-950/30 border border-violet-500/30 text-violet-300 font-mono text-[11px]">
+        <span>⚡ Webhooks:</span>
+        <strong id="audit-feed-stat-webhooks" class="text-violet-200">
+          {feed.events.filter((e) => isWebhookEvent(e)).length}
+        </strong>
+      </div>
+
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/30 border border-amber-500/30 text-amber-300 font-mono text-[11px]">
+        <span>⚠️ Alerts:</span>
+        <strong id="audit-feed-stat-alerts" class="text-amber-200">
+          {(feed.summary.by_severity['critical'] || 0) + (feed.summary.by_severity['warning'] || 0)}
+        </strong>
+      </div>
+
+      <!-- Pause / Resume Polling Toggle -->
+      <button
+        id="btn-toggle-pause-feed"
+        class="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors font-medium text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+        title="Pause or resume live auto-polling"
+      >
+        <span id="icon-pause-feed">⏸</span>
+        <span id="text-pause-feed">Pause</span>
+      </button>
+
+      <!-- Manual Refresh Button -->
+      <button
+        id="btn-refresh-feed"
+        class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 transition-colors font-medium text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+        title="Fetch latest audit events from backend"
+      >
+        <svg id="audit-refresh-icon" class="w-3.5 h-3.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span>Refresh</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter & Search Toolbar -->
+  <div class="px-5 py-3 border-b border-slate-800/80 bg-slate-950/25 flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <!-- Filters: Categories & Webhook Filter -->
+    <div class="flex flex-wrap items-center gap-1.5 text-xs">
+      <button
+        class="audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+        data-category=""
+      >
+        All Events
+      </button>
+      <button
+        id="btn-filter-webhooks-only"
+        class="audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700 hover:border-violet-500/50"
+        data-category="webhook"
+      >
+        ⚡ Webhooks Only
+      </button>
+      <button
+        class="audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700"
+        data-category="security"
+      >
+        Security
+      </button>
+      <button
+        class="audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700"
+        data-category="device"
+      >
+        Nodes
+      </button>
+      <button
+        class="audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700"
+        data-category="acl"
+      >
+        ACL
+      </button>
+      <button
+        class="audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700"
+        data-category="posture"
+      >
+        Posture
+      </button>
+    </div>
+
+    <!-- Severity & Search Input -->
+    <div class="flex items-center gap-2">
+      <select
+        id="audit-severity-select"
+        class="px-2.5 py-1.5 text-xs rounded-lg bg-slate-900 border border-slate-700 text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+      >
+        <option value="">All Severities</option>
+        <option value="critical">Critical</option>
+        <option value="error">Error</option>
+        <option value="warning">Warning</option>
+        <option value="info">Info</option>
+      </select>
+
+      <div class="relative w-full md:w-56">
+        <input
+          type="text"
+          id="audit-search-input"
+          placeholder="Filter events, nodes, actors..."
+          class="w-full px-3 py-1.5 text-xs rounded-lg bg-slate-900 border border-slate-700 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+        />
+        <button
+          id="audit-clear-search"
+          class="hidden absolute right-2 top-1.5 text-slate-500 hover:text-slate-300 text-xs"
+          title="Clear search"
+        >
+          &times;
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feed Event List Container -->
+  <div class="p-5">
+    <div id="audit-feed-empty" class="hidden text-center py-12">
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-800 text-slate-400 mb-3 text-lg">
+        🔍
+      </div>
+      <p class="text-sm font-semibold text-slate-300">No matching audit events</p>
+      <p class="text-xs text-slate-500 mt-1">Try resetting your category, severity, or search filters.</p>
+      <button
+        id="btn-reset-filters"
+        class="mt-3 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+      >
+        Reset Filters
+      </button>
+    </div>
+
+    <!-- The actual events list -->
+    <div id="audit-feed-list" class="space-y-3 font-mono">
+      {feed.events.map((evt) => {
+        const isWebhook = isWebhookEvent(evt);
+        const sevStyle = getSeverityStyle(evt.severity);
+        const catStyle = getCategoryStyle(evt.event_category);
+
+        return (
+          <div
+            class={`audit-event-card p-4 rounded-xl border transition-all hover:border-slate-700 ${sevStyle.bgClass} ${sevStyle.borderClass}`}
+            data-id={evt.id}
+            data-severity={evt.severity}
+            data-category={evt.event_category}
+            data-webhook={isWebhook ? 'true' : 'false'}
+            data-text={`${evt.event_type} ${evt.message || ''} ${evt.hostname || ''} ${evt.actor || ''} ${evt.ip_address || ''}`.toLowerCase()}
+          >
+            <!-- Card Header: Chips & Timestamp -->
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <!-- Severity Chip -->
+                <span class={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${sevStyle.badgeClass}`}>
+                  <span class={`w-1.5 h-1.5 rounded-full ${sevStyle.dotClass}`}></span>
+                  {sevStyle.badgeText}
+                </span>
+
+                <!-- Webhook Highlight Badge -->
+                {isWebhook && (
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-violet-500/20 text-violet-300 border border-violet-500/40 animate-pulse">
+                    ⚡ WEBHOOK
+                  </span>
+                )}
+
+                <!-- Category Chip -->
+                <span class={`px-2 py-0.5 rounded text-[10px] font-medium border ${catStyle.class}`}>
+                  {catStyle.label}
+                </span>
+
+                <!-- Event Type -->
+                <span class="text-slate-300 font-semibold text-xs">
+                  {evt.event_type}
+                </span>
+              </div>
+
+              <!-- Timestamp (Relative with Full ISO Hover) -->
+              <span
+                class="text-slate-500 text-[11px] font-sans shrink-0 cursor-help"
+                title={formatDateTime(evt.created_at)}
+              >
+                {formatRelativeTime(evt.created_at)}
+              </span>
+            </div>
+
+            <!-- Message Description -->
+            <div class="mt-2 text-slate-200 text-xs font-sans font-normal leading-relaxed">
+              {evt.message || 'No message provided for event'}
+            </div>
+
+            <!-- Context Bar: Hostname, Actor, IP, and Expandable Details -->
+            <div class="mt-3 pt-2.5 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+              <div class="flex flex-wrap items-center gap-3">
+                {evt.hostname && (
+                  <span class="inline-flex items-center gap-1 text-slate-300">
+                    <span class="text-slate-500">Node:</span>
+                    <strong class="font-mono text-emerald-400">{evt.hostname}</strong>
+                  </span>
+                )}
+                {evt.actor && (
+                  <span class="inline-flex items-center gap-1">
+                    <span class="text-slate-500">Actor:</span>
+                    <span class={`font-mono ${evt.actor === 'webhook' ? 'text-violet-400 font-bold' : 'text-slate-300'}`}>
+                      {evt.actor}
+                    </span>
+                  </span>
+                )}
+                {evt.ip_address && (
+                  <span class="inline-flex items-center gap-1">
+                    <span class="text-slate-500">IP:</span>
+                    <span class="font-mono text-slate-400">{evt.ip_address}</span>
+                  </span>
+                )}
+                {evt.os && (
+                  <span class="inline-flex items-center gap-1">
+                    <span class="text-slate-500">OS:</span>
+                    <span class="text-slate-300 font-sans">{evt.os}</span>
+                  </span>
+                )}
+              </div>
+
+              {evt.details && Object.keys(evt.details).length > 0 && (
+                <button
+                  type="button"
+                  class="btn-toggle-event-details text-[11px] text-indigo-400 hover:text-indigo-300 underline font-sans focus:outline-none"
+                  data-target={`details-${evt.id}`}
+                >
+                  View Details
+                </button>
+              )}
+            </div>
+
+            <!-- Expandable JSON Details Drawer -->
+            {evt.details && Object.keys(evt.details).length > 0 && (
+              <div id={`details-${evt.id}`} class="hidden mt-3 p-3 rounded-lg bg-slate-950/80 border border-slate-800 text-[11px] text-slate-300 overflow-x-auto">
+                <pre class="font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">{JSON.stringify(evt.details, null, 2)}</pre>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+</div>
+
+<script>
+  import { api } from '../services/api';
+  import type { AuditLogEventItem } from '../types';
+  import {
+    formatRelativeTime,
+    formatDateTime,
+    isWebhookEvent,
+    getSeverityStyle,
+    getCategoryStyle,
+  } from '../utils/formatters';
+
+  let isPaused = false;
+  let pollIntervalId: any = null;
+  let activeCategoryFilter = '';
+  let activeSeverityFilter = '';
+  let activeSearchQuery = '';
+
+  function escapeHtml(unsafe: string): string {
+    return unsafe
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function filterEventsDOM() {
+    const cards = document.querySelectorAll<HTMLElement>('.audit-event-card');
+    let visibleCount = 0;
+
+    cards.forEach((card) => {
+      const cardCategory = card.getAttribute('data-category') || '';
+      const cardSeverity = card.getAttribute('data-severity') || '';
+      const isWebhook = card.getAttribute('data-webhook') === 'true';
+      const cardText = card.getAttribute('data-text') || '';
+
+      let matchCategory = true;
+      if (activeCategoryFilter === 'webhook') {
+        matchCategory = isWebhook;
+      } else if (activeCategoryFilter) {
+        matchCategory = cardCategory.toLowerCase() === activeCategoryFilter.toLowerCase();
+      }
+
+      let matchSeverity = true;
+      if (activeSeverityFilter) {
+        matchSeverity = cardSeverity.toLowerCase() === activeSeverityFilter.toLowerCase();
+      }
+
+      let matchSearch = true;
+      if (activeSearchQuery) {
+        matchSearch = cardText.includes(activeSearchQuery.toLowerCase());
+      }
+
+      if (matchCategory && matchSeverity && matchSearch) {
+        card.classList.remove('hidden');
+        visibleCount++;
+      } else {
+        card.classList.add('hidden');
+      }
+    });
+
+    const emptyState = document.getElementById('audit-feed-empty');
+    if (emptyState) {
+      if (visibleCount === 0) {
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+      }
+    }
+  }
+
+  function renderEventCardHTML(evt: AuditLogEventItem): string {
+    const isWebhook = isWebhookEvent(evt);
+    const sevStyle = getSeverityStyle(evt.severity);
+    const catStyle = getCategoryStyle(evt.event_category);
+    const cardText = `${evt.event_type} ${evt.message || ''} ${evt.hostname || ''} ${evt.actor || ''} ${evt.ip_address || ''}`.toLowerCase();
+    const detailsJson = evt.details && Object.keys(evt.details).length > 0 ? JSON.stringify(evt.details, null, 2) : '';
+
+    return `
+      <div
+        class="audit-event-card p-4 rounded-xl border transition-all hover:border-slate-700 ${sevStyle.bgClass} ${sevStyle.borderClass}"
+        data-id="${escapeHtml(evt.id)}"
+        data-severity="${escapeHtml(evt.severity)}"
+        data-category="${escapeHtml(evt.event_category)}"
+        data-webhook="${isWebhook ? 'true' : 'false'}"
+        data-text="${escapeHtml(cardText)}"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${sevStyle.badgeClass}">
+              <span class="w-1.5 h-1.5 rounded-full ${sevStyle.dotClass}"></span>
+              ${sevStyle.badgeText}
+            </span>
+
+            ${
+              isWebhook
+                ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase bg-violet-500/20 text-violet-300 border border-violet-500/40 animate-pulse">⚡ WEBHOOK</span>`
+                : ''
+            }
+
+            <span class="px-2 py-0.5 rounded text-[10px] font-medium border ${catStyle.class}">
+              ${catStyle.label}
+            </span>
+
+            <span class="text-slate-300 font-semibold text-xs">
+              ${escapeHtml(evt.event_type)}
+            </span>
+          </div>
+
+          <span
+            class="text-slate-500 text-[11px] font-sans shrink-0 cursor-help"
+            title="${escapeHtml(formatDateTime(evt.created_at))}"
+          >
+            ${escapeHtml(formatRelativeTime(evt.created_at))}
+          </span>
+        </div>
+
+        <div class="mt-2 text-slate-200 text-xs font-sans font-normal leading-relaxed">
+          ${escapeHtml(evt.message || 'No message provided for event')}
+        </div>
+
+        <div class="mt-3 pt-2.5 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+          <div class="flex flex-wrap items-center gap-3">
+            ${
+              evt.hostname
+                ? `<span class="inline-flex items-center gap-1 text-slate-300"><span class="text-slate-500">Node:</span><strong class="font-mono text-emerald-400">${escapeHtml(
+                    evt.hostname
+                  )}</strong></span>`
+                : ''
+            }
+            ${
+              evt.actor
+                ? `<span class="inline-flex items-center gap-1"><span class="text-slate-500">Actor:</span><span class="font-mono ${
+                    evt.actor === 'webhook' ? 'text-violet-400 font-bold' : 'text-slate-300'
+                  }">${escapeHtml(evt.actor)}</span></span>`
+                : ''
+            }
+            ${
+              evt.ip_address
+                ? `<span class="inline-flex items-center gap-1"><span class="text-slate-500">IP:</span><span class="font-mono text-slate-400">${escapeHtml(
+                    evt.ip_address
+                  )}</span></span>`
+                : ''
+            }
+            ${
+              evt.os
+                ? `<span class="inline-flex items-center gap-1"><span class="text-slate-500">OS:</span><span class="text-slate-300 font-sans">${escapeHtml(
+                    evt.os
+                  )}</span></span>`
+                : ''
+            }
+          </div>
+
+          ${
+            detailsJson
+              ? `<button type="button" class="btn-toggle-event-details text-[11px] text-indigo-400 hover:text-indigo-300 underline font-sans focus:outline-none" data-target="details-${escapeHtml(
+                  evt.id
+                )}">View Details</button>`
+              : ''
+          }
+        </div>
+
+        ${
+          detailsJson
+            ? `<div id="details-${escapeHtml(
+                evt.id
+              )}" class="hidden mt-3 p-3 rounded-lg bg-slate-950/80 border border-slate-800 text-[11px] text-slate-300 overflow-x-auto"><pre class="font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">${escapeHtml(
+                detailsJson
+              )}</pre></div>`
+            : ''
+        }
+      </div>
+    `;
+  }
+
+  function bindEventDetailButtons() {
+    document.querySelectorAll('.btn-toggle-event-details').forEach((btn) => {
+      btn.replaceWith(btn.cloneNode(true));
+    });
+    document.querySelectorAll('.btn-toggle-event-details').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const targetId = (e.currentTarget as HTMLElement).getAttribute('data-target');
+        if (targetId) {
+          const detailEl = document.getElementById(targetId);
+          if (detailEl) {
+            detailEl.classList.toggle('hidden');
+          }
+        }
+      });
+    });
+  }
+
+  async function fetchAuditFeed() {
+    if (isPaused) return;
+
+    const component = document.getElementById('audit-feed-component');
+    const tailnet = component?.getAttribute('data-tailnet') || undefined;
+    const limitAttr = component?.getAttribute('data-limit');
+    const limit = limitAttr ? parseInt(limitAttr, 10) : 50;
+    const refreshIcon = document.getElementById('audit-refresh-icon');
+
+    if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+    try {
+      const feedData = await api.getAuditFeed({
+        tailnet,
+        limit,
+        order: 'desc',
+      });
+
+      if (feedData && feedData.events) {
+        // Update stats
+        const totalEl = document.getElementById('audit-feed-stat-total');
+        const webhooksEl = document.getElementById('audit-feed-stat-webhooks');
+        const alertsEl = document.getElementById('audit-feed-stat-alerts');
+
+        if (totalEl) totalEl.textContent = String(feedData.total || feedData.events.length);
+        if (webhooksEl) {
+          const whCount = feedData.events.filter((e) => isWebhookEvent(e)).length;
+          webhooksEl.textContent = String(whCount);
+        }
+        if (alertsEl) {
+          const crit = feedData.summary?.by_severity?.critical || 0;
+          const warn = feedData.summary?.by_severity?.warning || 0;
+          alertsEl.textContent = String(crit + warn);
+        }
+
+        // Render events list
+        const feedList = document.getElementById('audit-feed-list');
+        if (feedList) {
+          feedList.innerHTML = feedData.events.map(renderEventCardHTML).join('');
+          bindEventDetailButtons();
+          filterEventsDOM();
+        }
+      }
+    } catch (err) {
+      console.warn('Backend /api/v1/audit/feed not reachable or returned error:', err);
+    } finally {
+      if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    bindEventDetailButtons();
+
+    // Initial fetch from live API
+    fetchAuditFeed();
+
+    // Category filter buttons
+    const catButtons = document.querySelectorAll<HTMLElement>('.audit-category-filter');
+    catButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        catButtons.forEach((b) => {
+          b.className =
+            'audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700';
+        });
+        btn.className =
+          'audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+
+        activeCategoryFilter = btn.getAttribute('data-category') || '';
+        filterEventsDOM();
+      });
+    });
+
+    // Severity select
+    const sevSelect = document.getElementById('audit-severity-select') as HTMLSelectElement | null;
+    if (sevSelect) {
+      sevSelect.addEventListener('change', () => {
+        activeSeverityFilter = sevSelect.value;
+        filterEventsDOM();
+      });
+    }
+
+    // Search input
+    const searchInput = document.getElementById('audit-search-input') as HTMLInputElement | null;
+    const clearSearch = document.getElementById('audit-clear-search');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        activeSearchQuery = searchInput.value.trim();
+        if (clearSearch) {
+          if (activeSearchQuery) {
+            clearSearch.classList.remove('hidden');
+          } else {
+            clearSearch.classList.add('hidden');
+          }
+        }
+        filterEventsDOM();
+      });
+    }
+    if (clearSearch && searchInput) {
+      clearSearch.addEventListener('click', () => {
+        searchInput.value = '';
+        activeSearchQuery = '';
+        clearSearch.classList.add('hidden');
+        filterEventsDOM();
+      });
+    }
+
+    // Reset filters button
+    const resetBtn = document.getElementById('btn-reset-filters');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        activeCategoryFilter = '';
+        activeSeverityFilter = '';
+        activeSearchQuery = '';
+        if (searchInput) searchInput.value = '';
+        if (sevSelect) sevSelect.value = '';
+        if (clearSearch) clearSearch.classList.add('hidden');
+
+        catButtons.forEach((b) => {
+          if (b.getAttribute('data-category') === '') {
+            b.className =
+              'audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          } else {
+            b.className =
+              'audit-category-filter px-2.5 py-1 rounded-lg font-medium transition-all bg-slate-800/80 text-slate-300 hover:text-white border border-slate-700';
+          }
+        });
+
+        filterEventsDOM();
+      });
+    }
+
+    // Pause / Resume Polling
+    const togglePauseBtn = document.getElementById('btn-toggle-pause-feed');
+    const pauseIcon = document.getElementById('icon-pause-feed');
+    const pauseText = document.getElementById('text-pause-feed');
+    const liveIndicator = document.getElementById('audit-feed-live-indicator');
+    const liveText = document.getElementById('audit-feed-live-text');
+
+    if (togglePauseBtn) {
+      togglePauseBtn.addEventListener('click', () => {
+        isPaused = !isPaused;
+        if (isPaused) {
+          if (pollIntervalId) {
+            clearInterval(pollIntervalId);
+            pollIntervalId = null;
+          }
+          if (pauseIcon) pauseIcon.textContent = '▶';
+          if (pauseText) pauseText.textContent = 'Resume';
+          if (liveIndicator) {
+            liveIndicator.className =
+              'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider uppercase bg-amber-500/10 text-amber-400 border border-amber-500/30';
+          }
+          if (liveText) liveText.textContent = 'Paused';
+        } else {
+          if (pauseIcon) pauseIcon.textContent = '⏸';
+          if (pauseText) pauseText.textContent = 'Pause';
+          if (liveIndicator) {
+            liveIndicator.className =
+              'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/30';
+          }
+          if (liveText) liveText.textContent = 'Live Polling (8s)';
+          fetchAuditFeed();
+          if (!pollIntervalId) {
+            pollIntervalId = setInterval(fetchAuditFeed, 8000);
+          }
+        }
+      });
+    }
+
+    // Manual Refresh button
+    const refreshBtn = document.getElementById('btn-refresh-feed');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        fetchAuditFeed();
+      });
+    }
+
+    // Auto-poll every 8 seconds
+    pollIntervalId = setInterval(fetchAuditFeed, 8000);
+  });
+</script>

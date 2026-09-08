@@ -144,6 +144,19 @@ from app.services.webhook import (
     validate_tailscale_signature,
     verify_tailscale_signature,
 )
+from app.services.fleet_matrix import (
+    DEFAULT_FLEET_MATRIX_COLUMNS,
+    evaluate_node_matrix_item,
+    get_fleet_matrix,
+    get_fleet_matrix_summary,
+)
+from app.services.health import (
+    get_aggregated_health_statistics,
+)
+from app.services.audit import (
+    get_chronological_audit_log_feed,
+    get_node_audit_log_feed,
+)
 
 __all__ = [
     "TailscaleAPIError",
@@ -263,6 +276,13 @@ __all__ = [
     "get_fleet_acl_events",
     "get_fleet_acl_overview",
     "get_webhook_listener_status",
+    "get_fleet_matrix",
+    "get_fleet_matrix_summary",
+    "evaluate_node_matrix_item",
+    "DEFAULT_FLEET_MATRIX_COLUMNS",
+    "get_aggregated_health_statistics",
+    "get_chronological_audit_log_feed",
+    "get_node_audit_log_feed",
 ]
 
 

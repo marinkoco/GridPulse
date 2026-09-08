@@ -1,5 +1,29 @@
 """Pydantic schemas package."""
 
+from app.schemas.audit import (
+    AuditFeedResponse,
+    AuditFeedSummary,
+    AuditLogEventItem,
+)
+from app.schemas.fleet_matrix import (
+    FleetMatrixColumn,
+    FleetMatrixCrossTabulation,
+    FleetMatrixResponse,
+    NodeMatrixItem,
+)
+from app.schemas.health import (
+    ActiveAlertItem,
+    AggregatedHealthStatsResponse,
+    HealthSummaryAuditAlerts,
+    HealthSummaryCertificates,
+    HealthSummaryFleet,
+    HealthSummaryGeolocation,
+    HealthSummaryKeyExpiry,
+    HealthSummaryNetwork,
+    HealthSummaryPosture,
+    HealthSummaryTailnetLock,
+    HealthSummaryVersionDrift,
+)
 from app.schemas.tailscale import (
     ClientVersionInfo,
     DerpLatencyInfo,
@@ -30,4 +54,22 @@ __all__ = [
     "WebhookProcessedEvent",
     "WebhookResponse",
     "WebhookStatusResponse",
+    "FleetMatrixColumn",
+    "FleetMatrixCrossTabulation",
+    "FleetMatrixResponse",
+    "NodeMatrixItem",
+    "ActiveAlertItem",
+    "AggregatedHealthStatsResponse",
+    "HealthSummaryAuditAlerts",
+    "HealthSummaryCertificates",
+    "HealthSummaryFleet",
+    "HealthSummaryGeolocation",
+    "HealthSummaryKeyExpiry",
+    "HealthSummaryNetwork",
+    "HealthSummaryPosture",
+    "HealthSummaryTailnetLock",
+    "HealthSummaryVersionDrift",
+    "AuditFeedResponse",
+    "AuditFeedSummary",
+    "AuditLogEventItem",
 ]
