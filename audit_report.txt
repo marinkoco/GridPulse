@@ -1,0 +1,44 @@
+PASSED
+
+Step 11: Implement the Geolocation Anomaly Tracker by parsing the `ip:country` and `ip:publicAddress` posture attributes to detect and log impossible travel events.
+- Successfully implemented Geolocation Anomaly Tracker (`app/services/geolocation.py`)
+- Integrated into `sync_tailscale_devices` in `app/services/poller.py`
+- Triggered `IMPOSSIBLE_TRAVEL` and `LOCATION_CHANGED` audit log alerts
+- Persisted geolocation state in `telemetry_metadata` and `NodeState`
+- Exposed API endpoints: `/fleet/geolocation`, `/fleet/geolocation/impossible-travel`, `/fleet/nodes/{node_id}/geolocation`
+- Unit and integration tests passing
+
+Step 12: Implement the Tailnet Lock status tracker to identify unsigned and quarantined nodes by parsing their locked-out status and Tailnet Lock public keys.
+- Successfully implemented Tailnet Lock tracker (`app/services/tailnet_lock.py`)
+- Parsed Tailnet Lock public keys (`nlpub:...`, `tlpub:...`) and error status
+- Identified unsigned, locked out, quarantined, and trusted signing nodes
+- Emitted audit log alerts (`TAILNET_LOCK_LOCKED_OUT`, `TAILNET_LOCK_QUARANTINED`, `TAILNET_LOCK_UNSIGNED`, `TAILNET_LOCK_KEY_ROTATED`)
+- Exposed API endpoints: `/fleet/tailnet-lock`, `/fleet/tailnet-lock/overview`, `/fleet/tailnet-lock/locked-out`, `/fleet/tailnet-lock/unsigned`, `/fleet/tailnet-lock/signing-nodes`, `/fleet/nodes/{node_id}/tailnet-lock`
+- Unit and integration tests passing
+
+Step 13: Implement the MagicDNS SSL Monitor background task to execute async HTTP requests against internal `.ts.net` domains, parsing and logging TLS certificate expiration dates.
+- Implemented `app/tasks/ssl_monitor.py` and `app/services/magicdns_ssl.py` background task workers
+- Executed async HTTP and TLS socket handshakes against internal `.ts.net` MagicDNS endpoints
+- Extracted peer certificate metadata via `ssl.SSLContext` and `asyncio.open_connection` with fallback to `httpx.AsyncClient`
+- Extracted Subject Alternative Names (SAN), issuer, subject, validity window, and computed days remaining
+- Added comprehensive logging of parsed certificate expiration dates at INFO level
+- Emitted audit log alerts on expired certificates (`SSL_CERT_EXPIRED`) and imminent expiration warnings (`SSL_CERT_EXPIRING`)
+- Wired background worker into APScheduler in `app/services/scheduler.py` and application startup in `app/main.py`
+- Exposed fleet aggregation and manual probe endpoints: `/fleet/magicdns-ssl`, `/fleet/magicdns-ssl/overview`, `/fleet/magicdns-ssl/expiring`, `/fleet/magicdns-ssl/probe`, `/fleet/nodes/{node_id}/magicdns-ssl`
+- All 198 unit and integration tests passing
+
+Step 14: Build the real-time HTTPS webhook listener endpoint in FastAPI to receive Tailscale configuration changes and ACL modification events.
+- Built real-time HTTPS webhook receiver endpoint at `/api/v1/webhooks/tailscale` and root alias `/webhooks/tailscale`
+- Implemented event categorization for ACL updates (`policyUpdate`), device lifecycles (`nodeCreated`, `nodeDeleted`), and user lifecycles
+- Integrated live ACL policy retrieval upon policy update events via `TailscaleClient.get_acl()`
+- Recorded all incoming events into `AuditLog` database table
+- Exposed monitoring and audit endpoints: `/fleet/acl/events`, `/fleet/acl/overview`, `/fleet/acl/policy`, `/webhooks/status`
+
+Step 15: Implement HMAC signature verification on the webhook listener by splitting and validating the `t` (timestamp) and `v1` (signature) values from the `Tailscale-Webhook-Signature` header against the shared secret.
+- Implemented `split_tailscale_signature_header` to extract timestamp `t` and `v1` hex signature list from `Tailscale-Webhook-Signature`
+- Implemented `compute_tailscale_signature` using HMAC-SHA256 over message `${t}.${raw_body}`
+- Implemented `validate_tailscale_signature` with clock drift / replay window validation (`abs(now - t) <= tolerance_seconds`) and constant-time comparison via `hmac.compare_digest`
+- Supported multiple `v1` signatures and comma-separated/list shared secrets for zero-downtime secret rotation
+- Integrated verification into `process_tailscale_webhook` pipeline and FastAPI webhook routes, returning HTTP 401 on missing/invalid signature or expired timestamp
+- Added comprehensive test suite in `backend/tests/test_webhook.py` covering header splitting, HMAC calculation, timestamp tolerance, tampered payloads/timestamps, and endpoint integration
+- All 230 unit and integration tests passing
